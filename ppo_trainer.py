@@ -66,7 +66,8 @@ class Trainer:
         # PPO
         kl_threshold=0.01,
         kl_early_stopping=False,
-        advantage_normalization_type="minibatch",
+        obs_normalization=False,
+        value_normalization=False,
         num_ppo_epochs=40,
         drop_forced_skips=False,
         num_games_in_buffer=10,
@@ -231,18 +232,21 @@ class Trainer:
         if os.environ.get("DEBUG_MODE"):
             self.cfg.minibatch_size = 128
 
-        #
         self.cfg.num_ppo_epochs = num_ppo_epochs  # gradient steps per rollout
         self.cfg.kl_threshold = kl_threshold  # KL early-stop threshold
         self.cfg.kl_early_stopping = kl_early_stopping
         self.cfg.drop_forced_skips = drop_forced_skips
+        self.cfg.obs_normalization = obs_normalization
+        self.cfg.value_normalization = value_normalization
 
         self.cfg.max_steps = 10_000_000  # total env steps
 
-        # 
-        self.cfg.advantage_normalization_type = advantage_normalization_type
-        self.adv_moving_mean = 0.0
-        self.adv_moving_var = 1.0
+        # Running EMA stats for obs normalisation (updated once per rollout, applied at inference)
+        # Initialised lazily after the first rollout when the flat-state dimension is known.
+        self.obs_norm_mean: t.Tensor | None = None
+        self.obs_norm_std:  t.Tensor | None = None
+        self._state_shapes = None  # cached buffer state_shapes for obs dict flattening/unflattening
+
 
         # None, 'single-buffer', 'fixed-opponent', 'vs-random', 'vs-skip', or 'vs-scripted'
         self.overfit_mode = overfit_mode
@@ -366,8 +370,10 @@ class Trainer:
                     actions_2 = [None] * N
 
                     for i in range(N):
-                        actions_1[i], log_probs_1[i], _, values_1[i] = net_1.get_action_and_value(states_1[i])
-                        actions_2[i], _, _, _ = net_2.get_action_and_value(states_2[i])
+                        obs_1 = self._normalize_obs(states_1[i])
+                        obs_2 = self._normalize_obs(states_2[i])
+                        actions_1[i], log_probs_1[i], _, values_1[i] = net_1.get_action_and_value(obs_1)
+                        actions_2[i], _, _, _ = net_2.get_action_and_value(obs_2)
 
                 # --- Build joined actions ---
                 joined_actions = [self.join_actions(actions_1[i], actions_2[i]) for i in range(N)]
@@ -462,12 +468,26 @@ class Trainer:
             with t.no_grad():
                 for i in range(N):
                     if buffers[i].ptr > 0:
-                        _, _, _, last_val = net_1.get_action_and_value(states_1[i])
+                        _, _, _, last_val = net_1.get_action_and_value(self._normalize_obs(states_1[i]))
                         buffers[i].compute_gae(last_val, last_done[i])
             _gae_time = (time.perf_counter() - _gae_t0) if _is_profile_update else None
 
             # Merge per-env buffers into one for PPO update
             buffer = RolloutBuffer.merge(buffers)
+
+            # Update EMA obs normalisation stats from this rollout's flat states
+            if self.cfg.obs_normalization:
+                states_flat = buffer.states[:buffer.ptr]
+                rollout_mean = states_flat.mean(dim=0)
+                rollout_std  = states_flat.std(dim=0).clamp(min=1e-8)
+                if self.obs_norm_mean is None:
+                    self.obs_norm_mean = rollout_mean
+                    self.obs_norm_std  = rollout_std
+                else:
+                    momentum = 0.99
+                    self.obs_norm_mean = momentum * self.obs_norm_mean + (1 - momentum) * rollout_mean
+                    self.obs_norm_std  = momentum * self.obs_norm_std  + (1 - momentum) * rollout_std
+                self._state_shapes = buffer.state_shapes
 
             # --- Drop / log forced-skip steps ---
             if self.cfg.drop_forced_skips:
@@ -597,9 +617,12 @@ class Trainer:
             epoch_t0 = time.perf_counter() if profile else None
             epoch_approx_kl_meter = AverageMeter()
 
-            adv_metrics_tracker = [self.adv_moving_mean, self.adv_moving_var]
-
-            for batch in buffer.get_minibatches(self.cfg.minibatch_size, self.cfg.advantage_normalization_type, adv_metrics_tracker):
+            for batch in buffer.get_minibatches(
+                self.cfg.minibatch_size,
+                obs_norm_mean=self.obs_norm_mean if self.cfg.obs_normalization else None,
+                obs_norm_std=self.obs_norm_std  if self.cfg.obs_normalization else None,
+                value_normalization=self.cfg.value_normalization,
+            ):
                 actor_loss, critic_loss, entropy, ratio_mean, advantage_mean, explained_variance, \
                     pre_clip_grad_norm, critic_weight_norm, approx_kl, clip_fraction = \
                     self.on_batch_update(
@@ -620,8 +643,6 @@ class Trainer:
                 approx_kl_meter.add_sample(approx_kl)
                 epoch_approx_kl_meter.add_sample(approx_kl)
                 clip_fraction_meter.add_sample(clip_fraction)
-
-            self.adv_moving_mean, self.adv_moving_var = adv_metrics_tracker
 
             if profile:
                 epoch_times.append(time.perf_counter() - epoch_t0)
@@ -693,6 +714,7 @@ class Trainer:
             advantages * t.clip(ratio, 1 - self.cfg.ppo_clip, 1 + self.cfg.ppo_clip)
         ).mean()
 
+        # returns may already be normalised (rollout-level); critic predicts in the same space
         critic_loss = ((returns - values) ** 2).mean()
         loss = actor_loss + self.cfg.critic_loss_coef * critic_loss - self.entropy_loss_coef * entropies.mean()
 
@@ -838,11 +860,11 @@ class Trainer:
 
         try:
             while True:
-                state_1, state_2  = self.split_observations(state)
-                
+                state_1, state_2 = self.split_observations(state)
+
                 with t.no_grad():
-                    _, skip_logits_1, deck_logits_1, pos_logits_1 = net_1(state_1)
-                    _, skip_logits_2, deck_logits_2, pos_logits_2 = net_2(state_2)
+                    _, skip_logits_1, deck_logits_1, pos_logits_1 = net_1(self._normalize_obs(state_1))
+                    _, skip_logits_2, deck_logits_2, pos_logits_2 = net_2(self._normalize_obs(state_2))
 
                     if net_1.invalid_position_mask is not None:
                         pos_logits_1 = pos_logits_1.masked_fill(net_1.invalid_position_mask, float('-inf'))
@@ -1067,6 +1089,31 @@ class Trainer:
         }
 
     
+    def _normalize_obs(self, obs_dict: dict) -> dict:
+        """
+        Normalize an obs dict (as produced by split_observations) before it enters
+        the network, using the current EMA mean/std over the flat observation space.
+
+        When obs_normalization is disabled or stats are not yet initialised (first
+        rollout), the dict is returned unchanged.
+        """
+        if not self.cfg.obs_normalization or self.obs_norm_mean is None or self._state_shapes is None:
+            return obs_dict
+
+        # Flatten to a single (D,) tensor — same concatenation order as RolloutBuffer
+        flat = t.cat([v.flatten() for v in obs_dict.values()])  # (D,)
+        flat_normed = (flat - self.obs_norm_mean) / self.obs_norm_std
+
+        # Unflatten back to a dict with the original per-key shapes
+        result = {}
+        offset = 0
+        for key, shape in self._state_shapes.items():
+            size = int(np.prod(shape))
+            result[key] = flat_normed[offset : offset + size].reshape(shape)
+            offset += size
+        return result
+
+
     def set_seed(self, seed: int = 42):
         random.seed(seed)
         os.environ["PYTHONHASHSEED"] = str(seed)
@@ -1194,11 +1241,16 @@ if __name__ == "__main__":
         help="Enable early stopping based on KL divergence."
     )
     parser.add_argument(
-        "--advantage_normalization_type",
-        type=str,
-        default="minibatch",
-        choices=["minibatch", "moving_stats"],
-        help="Type of advantage normalization to use."
+        "--obs_normalization",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Normalise observations per-minibatch using a running EMA of mean/variance over the state buffer."
+    )
+    parser.add_argument(
+        "--value_normalization",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Normalise return targets before the critic MSE loss using a running EMA of mean/variance (values are denormalised for explained_variance logging)."
     )
     parser.add_argument(
         "--num_ppo_epochs",
@@ -1263,7 +1315,8 @@ if __name__ == "__main__":
         # PPO
         kl_threshold=args.kl_threshold,
         kl_early_stopping=args.kl_early_stopping,
-        advantage_normalization_type=args.advantage_normalization_type,
+        obs_normalization=args.obs_normalization,
+        value_normalization=args.value_normalization,
         num_ppo_epochs=args.num_ppo_epochs,
         drop_forced_skips=args.drop_forced_skips,
         num_games_in_buffer=args.num_games_in_buffer,

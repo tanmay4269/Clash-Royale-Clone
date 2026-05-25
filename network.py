@@ -1,3 +1,4 @@
+import numpy as np
 import torch as t
 import torch.nn as nn
 
@@ -8,7 +9,7 @@ from entities.troops import Knight, Giant, MiniPEKKA
 class ActorCritic(nn.Module):
     def __init__(
         self, 
-        
+
         entity_encoder_in_ch, 
         entity_encoder_mid_ch, 
         entity_encoder_out_ch,
@@ -16,15 +17,24 @@ class ActorCritic(nn.Module):
         trunk_extra_in_ch,
         trunk_mid_ch,
 
-        num_cards_in_deck,
-        max_num_cards,
-        position_space_width,
-        position_space_height,
+        activation_fn='relu',
+        disjoint_actor_critic=False,
+        use_cnn_position_decoder=False,
+        use_last_layer_norms=False,
+        append_deck_info_to_position_head_input=False,
+
+        num_cards_in_deck=3,
+        max_num_cards=3,
+        position_space_width=18,
+        position_space_height=32,
 
         invalid_position_mask=None,
         max_elixirs=10,
     ):
         super().__init__()
+
+        self.disjoint_actor_critic = disjoint_actor_critic
+        self.append_deck_info_to_position_head_input = append_deck_info_to_position_head_input
 
         self.max_num_cards = max_num_cards
         self.position_space_width  = position_space_width
@@ -33,49 +43,177 @@ class ActorCritic(nn.Module):
         self.invalid_position_mask = invalid_position_mask
         self.max_elixirs = max_elixirs
 
+        # Activation function selection
+        if activation_fn == 'relu':
+            activation_layer = nn.ReLU
+        elif activation_fn == 'tanh':
+            activation_layer = nn.Tanh
+        elif activation_fn == 'elu':
+            activation_layer = nn.ELU
+        else:
+            raise ValueError(f"Unsupported activation function: {activation_fn}")
+        
+
+        gain = np.sqrt(2)
+        # gain = nn.init.calculate_gain(activation_fn)  # Doesn't support ELU
+        def layer_init(layer, std=gain, bias_const=0.0):
+            nn.init.orthogonal_(layer.weight, std)
+            nn.init.constant_(layer.bias, bias_const)
+            return layer
+
+        def make_entity_encoder():
+            return nn.Sequential(
+                layer_init(nn.Linear(entity_encoder_in_ch, entity_encoder_mid_ch)),
+                nn.LayerNorm(entity_encoder_mid_ch),
+                activation_layer(),
+
+                layer_init(nn.Linear(entity_encoder_mid_ch, entity_encoder_mid_ch)),
+                nn.LayerNorm(entity_encoder_mid_ch),
+                activation_layer(),
+
+                layer_init(nn.Linear(entity_encoder_mid_ch, entity_encoder_out_ch)),
+                nn.LayerNorm(entity_encoder_out_ch),
+                activation_layer(),
+            )
+
+        def make_trunk():
+            return nn.Sequential(
+                layer_init(nn.Linear(trunk_extra_in_ch + (3 + 3 + 1 + 1) * entity_encoder_out_ch, trunk_mid_ch)),
+                nn.LayerNorm(trunk_mid_ch),
+                activation_layer(),
+
+                layer_init(nn.Linear(trunk_mid_ch, trunk_mid_ch)),
+                nn.LayerNorm(trunk_mid_ch),
+                activation_layer(),
+            )
+
+        if not self.disjoint_actor_critic:
+            self.shared_entity_encoder = make_entity_encoder()
+            self.shared_trunk = make_trunk()
+        else:
+            self.critic_entity_encoder = make_entity_encoder()
+            self.actor_entity_encoder  = make_entity_encoder()
+
+            self.critic_trunk = make_trunk()
+            self.actor_trunk = make_trunk()
+
+        # Specific Heads
+        self.critic_head = nn.Sequential(
+            layer_init(nn.Linear(trunk_mid_ch, 1), std=1.0)
+        )
+
+        self.actor_skip_net = nn.Sequential(
+            layer_init(nn.Linear(trunk_mid_ch, 1), std=0.01)
+        )
+
+        self.actor_deck_idx_net = nn.Sequential(
+            layer_init(nn.Linear(trunk_mid_ch, num_cards_in_deck), std=0.01)
+        )
+
+        self.actor_position_net = self.make_position_head(
+            use_cnn_position_decoder,
+            trunk_mid_ch + (num_cards_in_deck if self.append_deck_info_to_position_head_input else 0), 
+            position_space_width, 
+            position_space_height, 
+            layer_init,
+            activation_layer
+        )
+
         # Deck order must match cr_gym_env.step(): idx 0=Knight, 1=Giant, 2=MiniPEKKA
         _deck_classes = [Knight, Giant, MiniPEKKA]
         _costs = [EntityRegistry._dummy_instances[cls.__name__].deploy_cost for cls in _deck_classes]
         self.register_buffer("deck_deploy_costs", t.tensor(_costs, dtype=t.float32))
 
 
-        self.entity_encoder = nn.Sequential(
-            nn.Linear(entity_encoder_in_ch, entity_encoder_mid_ch),
-            nn.LayerNorm(entity_encoder_mid_ch),
-            nn.ReLU(),
+    def make_position_head(self, use_cnn_position_decoder, input_ch, position_space_width, position_space_height, layer_init, activation_layer):
+        if not use_cnn_position_decoder:
+            # return nn.Sequential(
+            #     layer_init(nn.Linear(input_ch, 384)),
+            #     activation_layer(),
 
-            nn.Linear(entity_encoder_mid_ch, entity_encoder_mid_ch),
-            nn.LayerNorm(entity_encoder_mid_ch),
-            nn.ReLU(),
+            #     layer_init(nn.Linear(384, 384)),
+            #     activation_layer(),
 
-            nn.Linear(entity_encoder_mid_ch, entity_encoder_out_ch),
+            #     layer_init(nn.Linear(384, 256)),
+            #     activation_layer(),
+
+            #     layer_init(nn.Linear(256, 32 * 18), std=0.01),
+            # )
+
+            return nn.Sequential(
+                layer_init(nn.Linear(input_ch, position_space_width * position_space_height), std=0.01)
+            )
+        
+        assert position_space_width == 18 and position_space_height == 32, "CNN decoder is hardcoded to 32x18 position space"
+
+        # * Note: this has way larger capacity than the linear layer version, so ablate carefuly
+        # ! If position logits misbehave in early training, revisit the orthogonal initialisation here coz theoretically its wrong!
+        return nn.Sequential(
+            # (input_ch) -> (input_ch,1,1)
+            nn.Unflatten(1, (input_ch, 1, 1)),
+
+            # (input_ch,1,1) -> (64,4,3)
+            layer_init(nn.ConvTranspose2d(
+                in_channels=input_ch,
+                out_channels=64,
+                kernel_size=(4, 3),
+                stride=1,
+                padding=0
+            )),
+            activation_layer(),
+
+            # (64,4,3) -> (32,8,6)
+            layer_init(nn.ConvTranspose2d(
+                64, 32,
+                kernel_size=4,
+                stride=2,
+                padding=1
+            )),
+            activation_layer(),
+
+            # (32,8,6) -> (16,16,12)
+            layer_init(nn.ConvTranspose2d(
+                32, 16,
+                kernel_size=4,
+                stride=2,
+                padding=1
+            )),
+            activation_layer(),
+
+            # (16,16,12) -> (1,32,18)
+            layer_init(nn.ConvTranspose2d(
+                16, 1,
+                kernel_size=(4, 8),
+                stride=(2, 1),
+                padding=(1, 0)
+            ), std=0.01),
+
+            # (1,32,18) -> (32*18)
+            nn.Flatten(),
         )
 
-        self.trunk = nn.Sequential(
-            nn.Linear(trunk_extra_in_ch + (3 + 3 + 1 + 1) * entity_encoder_out_ch, trunk_mid_ch),
-            nn.LayerNorm(trunk_mid_ch),
-            nn.ReLU(),
+    def get_trunk_input(self, obs, all_embeddings):
+        my_card_embeddings       = all_embeddings[:, 0 : self.max_num_cards]
+        opponent_card_embeddings = all_embeddings[:, self.max_num_cards : 2 * self.max_num_cards]
 
-            nn.Linear(trunk_mid_ch, trunk_mid_ch),
-            nn.LayerNorm(trunk_mid_ch),
-            nn.ReLU(),
-        )
+        my_crown_tower_embeddings       = all_embeddings[:, 2 * self.max_num_cards : 2 * self.max_num_cards + 3]
+        opponent_crown_tower_embeddings = all_embeddings[:, 2 * self.max_num_cards + 3 :]
 
-        self.critic = nn.Sequential(
-            nn.Linear(trunk_mid_ch, 1)
-        )
+        def masked_mean(embeddings, entities):
+            mask = (entities.abs().sum(dim=-1, keepdim=True) > 0).to(dtype=embeddings.dtype)
+            count = mask.sum(dim=1).clamp(min=1.0)
+            return (embeddings * mask).sum(dim=1) / count
 
-        self.actor_skip_net = nn.Sequential(
-            nn.Linear(trunk_mid_ch, 1)
-        )
+        trunk_input = t.cat([
+            obs["game_completion_fraction"],
+            obs["elixirs"],
+            my_crown_tower_embeddings.flatten(start_dim=1),                 # (B, 3 * entity_encoder_out_ch)
+            opponent_crown_tower_embeddings.flatten(start_dim=1),           # (B, 3 * entity_encoder_out_ch)
+            masked_mean(my_card_embeddings, obs["my_cards"]),               # (B, entity_encoder_out_ch)
+            masked_mean(opponent_card_embeddings, obs["opponent_cards"]),   # (B, entity_encoder_out_ch)
+        ], dim=-1).to(dtype=t.float32)                                      # (B, trunk_extra_in_ch + entity_encoder_out_ch) 
 
-        self.actor_deck_idx_net = nn.Sequential(
-            nn.Linear(trunk_mid_ch, num_cards_in_deck)
-        )
-
-        self.actor_position_net = nn.Sequential(
-            nn.Linear(trunk_mid_ch, position_space_width * position_space_height)
-        )
+        return trunk_input
 
 
     def forward(self, obs):
@@ -98,35 +236,32 @@ class ActorCritic(nn.Module):
             obs["opponent_crown_towers"], 
         ], dim=1).to(dtype=t.float32)
 
-        all_embeddings = self.entity_encoder(all_entities)
+        if not self.disjoint_actor_critic:
+            all_embeddings = self.shared_entity_encoder(all_entities)
 
-        my_card_embeddings       = all_embeddings[:, 0 : self.max_num_cards]
-        opponent_card_embeddings = all_embeddings[:, self.max_num_cards : 2 * self.max_num_cards]
+            shared_trunk_input = self.get_trunk_input(obs, all_embeddings)
+            shared_trunk_out   = self.shared_trunk(shared_trunk_input)
 
-        my_crown_tower_embeddings       = all_embeddings[:, 2 * self.max_num_cards : 2 * self.max_num_cards + 3]
-        opponent_crown_tower_embeddings = all_embeddings[:, 2 * self.max_num_cards + 3 :]
+            critic_head_input  = shared_trunk_out
+            actor_heads_inputs = shared_trunk_out
+        else:            
+            critic_embeddings = self.critic_entity_encoder(all_entities)
+            actor_embeddings  = self.actor_entity_encoder(all_entities)
 
-        def masked_mean(embeddings, entities):
-            mask = (entities.abs().sum(dim=-1, keepdim=True) > 0).to(dtype=embeddings.dtype)
-            count = mask.sum(dim=1).clamp(min=1.0)
-            return (embeddings * mask).sum(dim=1) / count
+            critic_trunk_input = self.get_trunk_input(obs, critic_embeddings)
+            actor_trunk_input  = self.get_trunk_input(obs, actor_embeddings)
 
-        trunk_input = t.cat([
-            obs["game_completion_fraction"],
-            obs["elixirs"],
-            my_crown_tower_embeddings.flatten(start_dim=1),                 # (B, 3 * entity_encoder_out_ch)
-            opponent_crown_tower_embeddings.flatten(start_dim=1),           # (B, 3 * entity_encoder_out_ch)
-            masked_mean(my_card_embeddings, obs["my_cards"]),               # (B, entity_encoder_out_ch)
-            masked_mean(opponent_card_embeddings, obs["opponent_cards"]),   # (B, entity_encoder_out_ch)
-        ], dim=-1).to(dtype=t.float32)  # (B, trunk_extra_in_ch + entity_encoder_out_ch)
+            critic_head_input = self.critic_trunk(critic_trunk_input)
+            actor_heads_inputs  = self.actor_trunk(actor_trunk_input)
 
-        trunk_out = self.trunk(trunk_input)
+        value = self.critic_head(critic_head_input).squeeze(-1)  # (B,)
 
-        value = self.critic(trunk_out).squeeze(-1)  # (B,)
-
-        skip_logits = self.actor_skip_net(trunk_out).squeeze(-1)  # (B,)
-        deck_logits = self.actor_deck_idx_net(trunk_out)
-        pos_logits = self.actor_position_net(trunk_out)
+        skip_logits = self.actor_skip_net(actor_heads_inputs).squeeze(-1)  # (B,)
+        deck_logits = self.actor_deck_idx_net(actor_heads_inputs)
+        
+        if self.append_deck_info_to_position_head_input:
+            actor_heads_inputs = t.cat([actor_heads_inputs, deck_logits], dim=-1)
+        pos_logits = self.actor_position_net(actor_heads_inputs)
         
         return value, skip_logits, deck_logits, pos_logits
 
@@ -286,3 +421,43 @@ class BotNet:
         skip_logits = self._update_toggle_and_skip(x, skip_logits)
         # Skip logits are expected as shape (B,)
         return value, skip_logits.squeeze(-1), deck_logits, pos_logits
+
+
+if __name__ == "__main__":
+    from itertools import product
+
+    # quick action critic net sanity check with dummy data
+    for disjoint_actor_critic, activation_fn, use_cnn_position_decoder, use_last_layer_norms, append_deck_info_to_position_head_input in \
+        list(product([False, True], ['relu', 'tanh', 'elu'], [False, True], [False, True], [False, True])):
+
+        net = ActorCritic(
+            entity_encoder_in_ch=26,
+            entity_encoder_mid_ch=64,
+            entity_encoder_out_ch=32,
+
+            trunk_extra_in_ch=2,
+            trunk_mid_ch=128,
+
+            activation_fn=activation_fn,
+            disjoint_actor_critic=disjoint_actor_critic,
+            use_cnn_position_decoder=use_cnn_position_decoder,
+            use_last_layer_norms=use_last_layer_norms,
+            append_deck_info_to_position_head_input=append_deck_info_to_position_head_input,
+
+            num_cards_in_deck=3,
+            max_num_cards=10,
+            position_space_width=18,
+            position_space_height=32,
+        )
+
+        dummy_obs = {
+            "game_completion_fraction": t.tensor([[0.5]]),
+            "elixirs": t.tensor([[0.5]]),
+            "my_cards": t.zeros((1, 10, 26)),
+            "opponent_cards": t.zeros((1, 10, 26)),
+            "my_crown_towers": t.zeros((1, 3, 26)),
+            "opponent_crown_towers": t.zeros((1, 3, 26)),
+        }
+
+        action, log_prob, entropy, value = net.get_action_and_value(dummy_obs)
+        print(f"Action: {action}, Log Prob: {log_prob}, Entropy: {entropy}, Value: {value}")

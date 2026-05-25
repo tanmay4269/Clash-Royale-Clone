@@ -68,43 +68,51 @@ class RolloutBuffer:
         self.returns[:n] = self.advantages[:n] + self.values[:n]
 
 
-    def get_minibatches(self, batch_size, adv_norm_type="minibatch", adv_metrics_tracker=None):
-        """batch_size: int -> yields (states, actions, old_log_probs, advantages, returns) as torch tensors"""
-        n = self.ptr  # Use actual filled count
+    def get_minibatches(self, batch_size, obs_norm_mean=None, obs_norm_std=None, value_normalization=False):
+        """
+        Yields (states, actions, old_log_probs, advantages, returns).
+
+        Advantages are always normalised per-minibatch (zero mean, unit std).
+
+        obs_norm_mean / obs_norm_std: pre-computed EMA tensors (shape D,) from the Trainer,
+            applied to the flat state tensor before unflattening.  Pass None (default) to skip.
+        value_normalization: if True, normalises returns by the rollout-level mean/std.
+            ret_mean and ret_std are always yielded (0.0 / 1.0 when off) so on_batch_update
+            can unconditionally denormalise the critic output back to raw return scale for
+            explained_variance logging.
+        """
+        n = self.ptr
         indices = np.random.permutation(n)
+
+        if value_normalization:
+            ret_mean = self.returns[:n].mean().item()
+            ret_std  = max(self.returns[:n].std().item(), 1e-8)
+        else:
+            ret_mean, ret_std = 0.0, 1.0
 
         for start in range(0, n - batch_size + 1, batch_size):
             batch_idx = indices[start : start + batch_size]
 
-            # Per-minibatch advantage normalization
+            # Per-minibatch advantage normalisation (always on)
             mb_advantages = self.advantages[batch_idx]
-            
-            if adv_norm_type == "minibatch":
-                mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
-            elif adv_norm_type == "moving_stats":
-                mb_mean = mb_advantages.mean().item()
-                mb_var = mb_advantages.var().item()
-                
-                # Update moving stats
-                if adv_metrics_tracker is not None:
-                    momentum = 0.99
-                    adv_metrics_tracker[0] = momentum * adv_metrics_tracker[0] + (1 - momentum) * mb_mean
-                    adv_metrics_tracker[1] = momentum * adv_metrics_tracker[1] + (1 - momentum) * mb_var
-                    
-                    mean = adv_metrics_tracker[0]
-                    std = np.sqrt(adv_metrics_tracker[1] + 1e-8)
-                else:
-                    mean = mb_mean
-                    std = mb_advantages.std().item() + 1e-8
-                    
-                mb_advantages = (mb_advantages - mean) / std
+            mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
+
+            # Obs normalisation (EMA stats from Trainer, applied consistently at inference and update)
+            mb_states = self.states[batch_idx]
+            if obs_norm_mean is not None:
+                mb_states = (mb_states - obs_norm_mean) / obs_norm_std
+
+            # Value normalisation (rollout-level stats)
+            mb_returns = self.returns[batch_idx]
+            if value_normalization:
+                mb_returns = (mb_returns - ret_mean) / ret_std
 
             yield (
-                self.unflatten_dict(self.states[batch_idx], self.state_shapes),
+                self.unflatten_dict(mb_states, self.state_shapes),
                 self.unflatten_dict(self.actions[batch_idx], self.action_shapes),
                 self.log_probs[batch_idx],
                 mb_advantages,
-                self.returns[batch_idx],
+                mb_returns,
             )
 
 
