@@ -171,7 +171,7 @@ class Troop(Entity):
             found_path = self.find_path(arena_cell_occupancy)
 
             if not found_path:
-                print("[WARN: Troop::update]: Couldn't find a path")
+                print("(WARN: Troop::update): Couldn't find a path")
 
         if found_path:
             if len(self.waypoints) == 0:

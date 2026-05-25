@@ -221,7 +221,6 @@ class Arena:
                     obj_i.apply_force(Vector2(fx, fy))
 
 
-
         ### Deploy Buffer Management ###
 
         # Snapshot which objects have finished deploying (list comprehension = deterministic order)
@@ -231,7 +230,7 @@ class Arena:
                 self.objects.append(obj)
                 # ! ADD TO PLAYER OBJECTS TOO
             else:
-                print("[WARN: Arena::update] Buffer Management: Can't deploy since max num objects has been reached")
+                print("(WARN: Arena::update) Buffer Management: Can't deploy since max num objects has been reached")
             self.deploy_buffer.remove(obj)
 
 

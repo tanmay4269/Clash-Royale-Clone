@@ -145,7 +145,7 @@ def apply_action_to_arena(arena, joined_action):
 
 
 class Game:
-    def __init__(self, opponent_mode: str = "random"):
+    def __init__(self, opponent_mode: str = "random", player_mode: str = "manual"):
         self._env_raw  = gym.make("ClashRoyaleEnv-v0")
         self._env_wrap = CRFlattenNormWrapper(self._env_raw)
 
@@ -157,7 +157,9 @@ class Game:
         self.max_num_objects = self.arena.max_num_objects
 
         self.opponent_mode = opponent_mode
-        self._bot          = self._make_bot(opponent_mode)
+        self.player_mode   = player_mode
+        self._player_2_bot = self._make_bot(opponent_mode)
+        self._player_1_bot = self._make_bot(player_mode) if player_mode != "manual" else None
 
         self.width  = self.arena.width  * self.arena.tile_size
         self.height = self.arena.height * self.arena.tile_size
@@ -225,13 +227,22 @@ class Game:
         raw_obs = self._env_raw.unwrapped._get_obs()
         return self._env_wrap.observation(raw_obs)
 
-    def _bot_action(self, obs_wrapped):
+    def _player_1_bot_action(self, obs_wrapped):
+        """Ask the bot for player-1's action."""
+        obs_1, _ = split_observations(
+            obs_wrapped, self._env_wrap, self.arena, self.max_num_objects
+        )
+        with t.no_grad():
+            action_1, _, _, _ = self._player_1_bot.get_action_and_value(obs_1)
+        return action_1
+
+    def _player_2_bot_action(self, obs_wrapped):
         """Ask the bot for player-2's action."""
         _, obs_2 = split_observations(
             obs_wrapped, self._env_wrap, self.arena, self.max_num_objects
         )
         with t.no_grad():
-            action_2, _, _, _ = self._bot.get_action_and_value(obs_2)
+            action_2, _, _, _ = self._player_2_bot.get_action_and_value(obs_2)
         return action_2
 
     @staticmethod
@@ -273,38 +284,25 @@ class Game:
                     self.arena._debug_active_card = MiniPEKKA
                     print("Active card -> MiniPEKKA")
 
-                # Bot-mode switching
-                elif event.key == pygame.K_r:
-                    self.opponent_mode = "random"
-                    self._bot = self._make_bot("random")
-                    pygame.display.set_caption("Clash Royale: vs random bot")
-                    print("Bot mode -> random")
-                elif event.key == pygame.K_s:
-                    self.opponent_mode = "skip"
-                    self._bot = self._make_bot("skip")
-                    pygame.display.set_caption("Clash Royale: vs skip bot")
-                    print("Bot mode -> skip")
-                elif event.key == pygame.K_c:
-                    self.opponent_mode = "scripted"
-                    self._bot = self._make_bot("scripted")
-                    pygame.display.set_caption("Clash Royale: vs scripted bot")
-                    print("Bot mode -> scripted")
-
         self.arena.render(self.screen)
 
         obs_wrapped = self._get_obs_wrapped()
-        action_2    = self._bot_action(obs_wrapped)
+        action_2    = self._player_2_bot_action(obs_wrapped)
 
-        # Human player 1 always skips in the bot-driven path;
-        # the human deploys manually via on_click().
-        action_1_skip = {"skip": t.tensor(1), "deck_idx": t.tensor(0), "position": t.tensor(0)}
-        joined = join_actions(action_1_skip, action_2, self.arena)
+        if self._player_1_bot:
+            action_1 = self._player_1_bot_action(obs_wrapped)
+        else:
+            # Human player 1 always skips in the bot-driven path;
+            # the human deploys manually via on_click().
+            action_1 = {"skip": t.tensor(1), "deck_idx": t.tensor(0), "position": t.tensor(0)}
 
-        # Only apply the bot's deploy (player_2); human clicks are handled by arena.on_click
+        joined = join_actions(action_1, action_2, self.arena)
+
+        # Apply bot deploys (player_1 only if not manual)
         bot_action = {
-            "player_1_skip":          1,          # human side: no auto deploy
-            "player_1_card_idx":      0,
-            "player_1_card_position": (0, 0),
+            "player_1_skip":          joined["player_1_skip"] if self._player_1_bot else 1,
+            "player_1_card_idx":      joined["player_1_card_idx"] if self._player_1_bot else 0,
+            "player_1_card_position": joined["player_1_card_position"] if self._player_1_bot else (0, 0),
             "player_2_skip":          joined["player_2_skip"],
             "player_2_card_idx":      joined["player_2_card_idx"],
             "player_2_card_position": joined["player_2_card_position"],
@@ -339,7 +337,13 @@ if __name__ == "__main__":
         default="random",
         help="Bot opponent mode ('random', 'skip', 'scripted') or path to checkpoint file to load",
     )
+    parser.add_argument(
+        "--player_mode",
+        type=str,
+        default="manual",
+        help="What does the active player do? ('manual', 'mirror' (same as opponent), 'random')"
+    )
     args = parser.parse_args()
 
-    game = Game(opponent_mode=args.opponent)
+    game = Game(opponent_mode=args.opponent, player_mode=args.player_mode)
     game.run()

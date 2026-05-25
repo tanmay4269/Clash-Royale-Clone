@@ -320,7 +320,7 @@ class ClashRoyaleEnv(gym.Env):
             terminated, truncated = terminated or _terminated, truncated or _truncated
             
         if PROFILE_ENV:
-            print(f"[PROFILE] arena.update (10x): {(time.perf_counter() - t0)*1000:.3f} ms")
+            print(f"(PROFILE) arena.update (10x): {(time.perf_counter() - t0)*1000:.3f} ms")
         
         if PROFILE_ENV:
             t0 = time.perf_counter()
@@ -328,7 +328,7 @@ class ClashRoyaleEnv(gym.Env):
         self._cur_obs = self._get_obs()
         
         if PROFILE_ENV:
-            print(f"[PROFILE] cr_gym_env._get_obs: {(time.perf_counter() - t0)*1000:.3f} ms")
+            print(f"(PROFILE) cr_gym_env._get_obs: {(time.perf_counter() - t0)*1000:.3f} ms")
 
 
         reward = self._get_reward(prev_obs, terminated, truncated)

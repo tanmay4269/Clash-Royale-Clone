@@ -74,6 +74,6 @@ class CRFlattenNormWrapper(gym.ObservationWrapper):
         }
         
         if PROFILE_ENV:
-            print(f"[PROFILE] cr_flatten_norm_wrapper.observation: {(time.perf_counter() - t0)*1000:.3f} ms")
+            print(f"(PROFILE) cr_flatten_norm_wrapper.observation: {(time.perf_counter() - t0)*1000:.3f} ms")
             
         return ret
