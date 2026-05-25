@@ -269,30 +269,30 @@ class Troop(Entity):
 
         grid_rows, grid_cols = tiled_occupancy_grid.shape
 
+        # All free tile indices, computed once and shared by both nearest_free calls.
+        free_cells = np.argwhere(tiled_occupancy_grid == 0)  # shape (K, 2)
+
         def nearest_free(px, py, toward_x=None, toward_y=None):
             """Snap a tile coordinate to the nearest unblocked cell.
-            Among all free cells at the minimum ring radius, pick the one
-            closest to (toward_x, toward_y) so the nudge faces the right direction."""
+            Fully vectorized: no Python loops, O(K) numpy arithmetic over ~500 cells."""
             tx = int(np.clip(px / SCALE, 0, grid_rows - 1))
             ty = int(np.clip(py / SCALE, 0, grid_cols - 1))
             if tiled_occupancy_grid[tx, ty] == 0:
                 return (tx, ty)
-            for rad in range(1, max(grid_rows, grid_cols)):
-                candidates = []
-                for dr in range(-rad, rad + 1):
-                    for dc in range(-rad, rad + 1):
-                        if abs(dr) != rad and abs(dc) != rad:
-                            continue
-                        nr, nc = tx + dr, ty + dc
-                        if 0 <= nr < grid_rows and 0 <= nc < grid_cols and tiled_occupancy_grid[nr, nc] == 0:
-                            candidates.append((nr, nc))
-                if candidates:
-                    if toward_x is not None:
-                        ref_r = toward_x / SCALE
-                        ref_c = toward_y / SCALE
-                        return min(candidates, key=lambda c: (c[0] - ref_r)**2 + (c[1] - ref_c)**2)
-                    return candidates[0]
-            return (tx, ty)
+            # Chebyshev distance from the blocked cell to every free cell
+            d2 = (free_cells[:, 0] - tx) ** 2 + (free_cells[:, 1] - ty) ** 2
+            min_d2 = d2.min()
+            # Candidates: all free cells at the minimum radius (the perimeter ring)
+            mask = d2 == min_d2
+            candidates = free_cells[mask]  # shape (M, 2)
+            if toward_x is not None and len(candidates) > 1:
+                # Among the ring, pick the cell closest to the approaching point
+                ref_r, ref_c = toward_x / SCALE, toward_y / SCALE
+                d_toward = (candidates[:, 0] - ref_r) ** 2 + (candidates[:, 1] - ref_c) ** 2
+                best = candidates[np.argmin(d_toward)]
+            else:
+                best = candidates[0]
+            return (int(best[0]), int(best[1]))
 
         # Start nudge toward target, target nudge toward troop
         start  = nearest_free(self.position.x, self.position.y,
