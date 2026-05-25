@@ -252,6 +252,13 @@ class Arena:
                 # print("Player 1 won!")
                 return True, False
 
+            # Clear the dead building's footprint from the occupancy grid so
+            # troops can navigate through the space it used to occupy.
+            if isinstance(obj, Building):
+                mask, mask_pos = obj.get_cell_occupancy()
+                clear_mask = np.zeros_like(mask)
+                self.occupy_cells(clear_mask, mask_pos)
+
             self.objects.remove(obj)
             # del obj
 

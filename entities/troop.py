@@ -249,12 +249,56 @@ class Troop(Entity):
 
         SCALE = 16  # Reduction by this much on each axis
 
-        # 1 => occupied
-        # Sample the center pixel of the tile to avoid walls bleeding into paths
-        tiled_occupancy_grid = (np.where(occupancy_grid == 1, 1, 0)[SCALE//2::SCALE, SCALE//2::SCALE]).astype(int)
+        # Center-pixel sample for walls (avoids bleed into adjacent tiles).
+        center = occupancy_grid[SCALE//2::SCALE, SCALE//2::SCALE]
 
-        start = (int(self.position.x / SCALE), int(self.position.y / SCALE))
-        target = (int(self.target.position.x / SCALE), int(self.target.position.y / SCALE))
+        # Max-pool across the full tile only for the building layer:
+        # if a building covers even one sub-pixel of a tile, block the whole tile.
+        h, w = occupancy_grid.shape
+        building_layer = (occupancy_grid == 2).astype(np.uint8)
+        building_any = (
+            building_layer
+            .reshape(h // SCALE, SCALE, w // SCALE, SCALE)
+            .max(axis=(1, 3))
+        ).astype(bool)
+
+        # Block: permanent walls (center-pixel) OR buildings (max-pool); troops passable.
+        tiled_occupancy_grid = np.where(
+            (center == 1) | building_any, 1, 0
+        ).astype(int)
+
+        grid_rows, grid_cols = tiled_occupancy_grid.shape
+
+        def nearest_free(px, py, toward_x=None, toward_y=None):
+            """Snap a tile coordinate to the nearest unblocked cell.
+            Among all free cells at the minimum ring radius, pick the one
+            closest to (toward_x, toward_y) so the nudge faces the right direction."""
+            tx = int(np.clip(px / SCALE, 0, grid_rows - 1))
+            ty = int(np.clip(py / SCALE, 0, grid_cols - 1))
+            if tiled_occupancy_grid[tx, ty] == 0:
+                return (tx, ty)
+            for rad in range(1, max(grid_rows, grid_cols)):
+                candidates = []
+                for dr in range(-rad, rad + 1):
+                    for dc in range(-rad, rad + 1):
+                        if abs(dr) != rad and abs(dc) != rad:
+                            continue
+                        nr, nc = tx + dr, ty + dc
+                        if 0 <= nr < grid_rows and 0 <= nc < grid_cols and tiled_occupancy_grid[nr, nc] == 0:
+                            candidates.append((nr, nc))
+                if candidates:
+                    if toward_x is not None:
+                        ref_r = toward_x / SCALE
+                        ref_c = toward_y / SCALE
+                        return min(candidates, key=lambda c: (c[0] - ref_r)**2 + (c[1] - ref_c)**2)
+                    return candidates[0]
+            return (tx, ty)
+
+        # Start nudge toward target, target nudge toward troop
+        start  = nearest_free(self.position.x, self.position.y,
+                              self.target.position.x, self.target.position.y)
+        target = nearest_free(self.target.position.x, self.target.position.y,
+                              self.position.x, self.position.y)
 
         path = self.a_star(tiled_occupancy_grid, start, target)
 
@@ -264,7 +308,8 @@ class Troop(Entity):
         self.waypoints = deque()
         for wp in path[1:-1]:
             self.waypoints.append(Vector2(wp) * SCALE + Vector2(SCALE/2, SCALE/2))
-        self.waypoints.append(Vector2(path[-1]) * SCALE)  # Offset on the last waypoint looks awkward
+        # Last waypoint: actual target position for a natural approach
+        self.waypoints.append(self.target.position.copy())
 
         return True
 
