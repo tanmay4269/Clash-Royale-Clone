@@ -61,10 +61,17 @@ class Arena:
 
 
         self.elapsed_time = 0
-        self.game_duration = 180  # sec
+        self.game_duration = 300  # 5:00 — extended for sudden death
 
         self.has_double_elixir_started = False
-        self.double_elixir_start = 90
+        self.has_triple_elixir_started = False
+        self.has_sudden_death_started = False
+        self.double_elixir_start = 120   # 2:00 mark
+        self.triple_elixir_start = 180   # 3:00 mark
+        self.sudden_death_start = 180    # 3:00 — same tick as triple elixir
+
+        # Set by update() when the game ends; 1 or 2 for the winning player, None otherwise
+        self.winner: int | None = None
         
 
         self._font = None
@@ -124,21 +131,45 @@ class Arena:
             surface.fill((128, 128, 128))
             screen.blit(surface, (tile_x * self.tile_size, tile_y * self.tile_size))
 
-        # HUD: elixir (bottom left) and timer (bottom right)
+        # HUD: mode indicator (top left) | E: X  MM:SS (top right) | E: X (bottom left)
         if self._font is None:
             self._font = pygame.font.SysFont(None, 14)
 
         screen_w = self.width * self.tile_size
         screen_h = self.height * self.tile_size
 
+        # Count-up timer in MM:SS — top right
+        elapsed = int(self.elapsed_time)
+        mins = elapsed // 60
+        secs = elapsed % 60
+        timer_text = self._font.render(f"{mins}:{secs:02d}", True, (220, 220, 220))
+        timer_x = screen_w - timer_text.get_width() - 4
+        screen.blit(timer_text, (timer_x, 4))
+
+        # Elixir / Sudden Death mode indicator — top right, just to the left of the timer
+        if self.has_sudden_death_started:
+            mode_label = "Sudden Death!"
+            mode_color = (255, 50, 50)    # bright red
+        elif self.has_triple_elixir_started:
+            mode_label = "3x Elixir!"
+            mode_color = (255, 100, 50)   # orange-red
+        elif self.has_double_elixir_started:
+            mode_label = "2x Elixir!"
+            mode_color = (100, 220, 255)  # cyan-blue
+        else:
+            mode_label = None
+
+        if mode_label is not None:
+            mode_text = self._font.render(mode_label, True, mode_color)
+            screen.blit(mode_text, (timer_x - mode_text.get_width() - 6, 4))
+
+        # Player 1 elixir — top left
         elixir_text_1 = self._font.render(f"E: {self.player_side_1.elixirs:.0f}", True, (220, 220, 220))
         screen.blit(elixir_text_1, (4, 4))
 
+        # Player 2 elixir — bottom left
         elixir_text_2 = self._font.render(f"E: {self.player_side_2.elixirs:.0f}", True, (220, 220, 220))
         screen.blit(elixir_text_2, (4, screen_h - elixir_text_2.get_height() - 4))
-
-        timer_text = self._font.render(f"{int(self.elapsed_time)}s", True, (220, 220, 220))
-        screen.blit(timer_text, (screen_w - timer_text.get_width() - 4, 4))
  
 
     def update(self, dt) -> Tuple[bool, bool]:
@@ -150,7 +181,10 @@ class Arena:
 
         self.elapsed_time += dt
         if self.elapsed_time >= self.game_duration:
+            self._resolve_tiebreaker()
             return False, True
+
+        in_sudden_death = self.has_sudden_death_started
 
         ### Collision Management ###
 
@@ -246,11 +280,32 @@ class Arena:
                 self.player_side_2.remove_object(obj)
 
             if obj == self.player_side_1.king_tower:
-                # print("Player 2 won!")
+                # King tower destroyed → opponent wins
+                self.winner = 2
                 return True, False
             elif obj == self.player_side_2.king_tower:
-                # print("Player 1 won!")
+                self.winner = 1
                 return True, False
+
+            # During sudden death any tower kill ends the game immediately
+            if in_sudden_death and isinstance(obj, Building):
+                if obj == self.player_side_1.princess_tower_1 or \
+                   obj == self.player_side_1.princess_tower_2:
+                    # P1's princess tower killed → P2 wins
+                    self.winner = 2
+                    # Still clear the footprint before returning
+                    mask, mask_pos = obj.get_cell_occupancy()
+                    self.occupy_cells(np.zeros_like(mask), mask_pos)
+                    self.objects.remove(obj)
+                    return True, False
+                elif obj == self.player_side_2.princess_tower_1 or \
+                     obj == self.player_side_2.princess_tower_2:
+                    # P2's princess tower killed → P1 wins
+                    self.winner = 1
+                    mask, mask_pos = obj.get_cell_occupancy()
+                    self.occupy_cells(np.zeros_like(mask), mask_pos)
+                    self.objects.remove(obj)
+                    return True, False
 
             # Clear the dead building's footprint from the occupancy grid so
             # troops can navigate through the space it used to occupy.
@@ -264,10 +319,19 @@ class Arena:
 
 
         ### Elixir Update ###
-        if not self.has_double_elixir_started and self.elapsed_time > self.double_elixir_start:
+        if not self.has_double_elixir_started and self.elapsed_time >= self.double_elixir_start:
             self.has_double_elixir_started = True
-            self.player_side_1.elixirs_incriment_cooldown /= 2
-            self.player_side_2.elixirs_incriment_cooldown /= 2
+            self.player_side_1.set_double_elixir_mode()
+            self.player_side_2.set_double_elixir_mode()
+
+        if not self.has_triple_elixir_started and self.elapsed_time >= self.triple_elixir_start:
+            self.has_triple_elixir_started = True
+            self.player_side_1.set_tripple_elixir_mode()
+            self.player_side_2.set_tripple_elixir_mode()
+
+        ### Sudden Death ###
+        if not self.has_sudden_death_started and self.elapsed_time >= self.sudden_death_start:
+            self.has_sudden_death_started = True
 
         self.player_side_1.update(dt)
         self.player_side_2.update(dt)
@@ -275,7 +339,39 @@ class Arena:
         return False, False
 
 
+    def _resolve_tiebreaker(self) -> None:
+        """
+        Called when the 5:00 hard limit is hit.
+        Rule 1 – most living towers wins.
+        Rule 2 – if equal towers, least total remaining HP loses (more damage taken).
+        Sets self.winner to 1, 2, or leaves it None on a true draw.
+        """
+        def _living_towers(side):
+            towers = [side.king_tower, side.princess_tower_1, side.princess_tower_2]
+            return [t for t in towers if t in self.objects]
+
+        p1_towers = _living_towers(self.player_side_1)
+        p2_towers = _living_towers(self.player_side_2)
+
+        n1, n2 = len(p1_towers), len(p2_towers)
+
+        if n1 > n2:
+            self.winner = 1
+        elif n2 > n1:
+            self.winner = 2
+        else:
+            # Equal tower count → compare total remaining HP
+            hp1 = sum(t.health for t in p1_towers)
+            hp2 = sum(t.health for t in p2_towers)
+            if hp1 > hp2:
+                self.winner = 1   # P1 has more HP remaining → P2 took more damage → P1 wins
+            elif hp2 > hp1:
+                self.winner = 2
+            # else: true draw, winner stays None
+
+
     def on_click(self) -> None:
+
         (mouse_x, mouse_y) = pygame.mouse.get_pos()
         tile_row = mouse_y // self.tile_size
         tile_col = mouse_x // self.tile_size

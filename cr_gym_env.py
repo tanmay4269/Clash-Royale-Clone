@@ -238,9 +238,22 @@ class ClashRoyaleEnv(gym.Env):
                 if float(self._cur_obs["player_1_crown_towers"][t_name]["health"]) <= 0
             )
 
+            winner = self.arena.winner  # 1, 2, or None (draw / truncated)
+            sudden_death_win = (
+                terminated
+                and winner is not None
+                and self.arena.has_sudden_death_started
+                and not (  # king tower still alive → princess-tower kill in SD
+                    float(self._cur_obs["player_1_crown_towers"]["king_tower"]["health"]) <= 0
+                    or float(self._cur_obs["player_2_crown_towers"]["king_tower"]["health"]) <= 0
+                )
+            )
+
             info["episode"] = {
                 "towers_killed_by_p1": towers_killed_by_p1,
                 "towers_killed_by_p2": towers_killed_by_p2,
+                "winner":              winner,
+                "sudden_death_win":    sudden_death_win,
                 "avg_elixir_p1":       self._ep_elixir_sum / max(1, self._ep_steps),
                 "skip_ratio":          self._ep_skips / max(1, self._ep_steps),
                 "deck_indices":        list(self._ep_decks),
@@ -382,17 +395,16 @@ class ClashRoyaleEnv(gym.Env):
                         player_1_reward += self.tower_distruction_reward
                         player_2_reward -= self.tower_distruction_reward
 
-        # 3. Game outcome
-        if terminated:
-            p1_king_h = float(self._cur_obs["player_1_crown_towers"]["king_tower"]["health"])
-            p2_king_h = float(self._cur_obs["player_2_crown_towers"]["king_tower"]["health"])
-
-            if p2_king_h <= 0:    # P1 wins
+        # 3. Game outcome  (covers termination AND 5:00 tiebreaker truncation)
+        if terminated or truncated:
+            winner = self.arena.winner  # set by Arena.update(); 1, 2, or None
+            if winner == 1:
                 player_1_reward += self.winning_reward
                 player_2_reward -= self.winning_reward
-            elif p1_king_h <= 0:  # P2 wins
+            elif winner == 2:
                 player_1_reward -= self.winning_reward
                 player_2_reward += self.winning_reward
+            # winner == None → true draw, no win bonus
 
         return player_1_reward, player_2_reward
 

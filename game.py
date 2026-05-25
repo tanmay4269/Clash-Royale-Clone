@@ -256,7 +256,78 @@ class Game:
             "================================\n"
         )
 
+    def _print_result(self, terminated: bool, truncated: bool) -> None:
+        """Print a human-readable end-of-game summary to stdout."""
+        arena   = self.arena
+        p1, p2  = arena.player_side_1, arena.player_side_2
+        winner  = arena.winner
+        elapsed = int(arena.elapsed_time)
+        mins, secs = elapsed // 60, elapsed % 60
+
+        # --- Classify the cause ---
+        if terminated:
+            flag = "TERMINATED"
+            in_sd = arena.has_sudden_death_started
+            # Was it a king-tower kill or a sudden-death princess-tower kill?
+            king_dead = (
+                p2.king_tower not in arena.objects
+                or p1.king_tower not in arena.objects
+            )
+            if in_sd and not king_dead:
+                cause = "Sudden Death – princess tower destroyed"
+            else:
+                cause = "King tower destroyed"
+        else:
+            flag  = "TRUNCATED"
+            cause = "Time limit (5:00)"
+
+        # --- Tower counts and HP ---
+        def tower_info(side):
+            towers = {
+                "King":       side.king_tower,
+                "Princess-1": side.princess_tower_1,
+                "Princess-2": side.princess_tower_2,
+            }
+            alive = {name: t for name, t in towers.items() if t in arena.objects}
+            total_hp = sum(t.health for t in alive.values())
+            return alive, total_hp
+
+        p1_alive, p1_hp = tower_info(p1)
+        p2_alive, p2_hp = tower_info(p2)
+
+        # --- Score line (mirrors gym reward logic) ---
+        tower_destruction_reward = 0.5
+        winning_reward           = 5.0
+
+        def count_destroyed(enemy_side):
+            towers = [enemy_side.king_tower, enemy_side.princess_tower_1, enemy_side.princess_tower_2]
+            return sum(1 for t in towers if t not in arena.objects)
+
+        p1_score = count_destroyed(p2) * tower_destruction_reward
+        p2_score = count_destroyed(p1) * tower_destruction_reward
+        if winner == 1:
+            p1_score += winning_reward
+            p2_score -= winning_reward
+        elif winner == 2:
+            p1_score -= winning_reward
+            p2_score += winning_reward
+
+        # --- Print ---
+        sep = "=" * 48
+        print(f"\n{sep}")
+        print(f"  GAME OVER  |  {mins}:{secs:02d}  |  {flag}")
+        print(f"  Cause    : {cause}")
+        print(f"  Winner   : Player {winner}" if winner else "  Winner   : Draw")
+        print(sep)
+        print(f"  {'':4}  {'Towers alive':>14}  {'Total HP':>10}  {'Score':>8}")
+        print(f"  {'P1':4}  {len(p1_alive):>14}  {p1_hp:>10.0f}  {p1_score:>+8.1f}")
+        print(f"  {'P2':4}  {len(p2_alive):>14}  {p2_hp:>10.0f}  {p2_score:>+8.1f}")
+        print(f"  P1 living: {', '.join(p1_alive) or 'none'}")
+        print(f"  P2 living: {', '.join(p2_alive) or 'none'}")
+        print(sep + "\n")
+
     def update(self):
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -311,11 +382,13 @@ class Game:
 
         terminated, truncated = self.arena.update(self.dt)
         if terminated or truncated:
+            self._print_result(terminated, truncated)
             self.running = False
             return
 
         pygame.display.flip()
-        self.dt = self.clock.tick(60) / 1000
+        # self.dt = self.clock.tick(60) / 1000
+        self.dt = 1/30
 
         ### * DEBUG * ###
         if False:

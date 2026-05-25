@@ -13,7 +13,7 @@ class PlayerSide:
 
         self.elixirs = 5.0  # init
         self.max_elixirs = 10  # TODO: move this up to arena class, pass as arg
-        self.elixirs_incriment_cooldown = 3.0
+        self.elixirs_increment_cooldown = 3.0
         self._elixir_timer = 0.0
 
         self.objects: List = []  # Add towers once initialised
@@ -23,7 +23,7 @@ class PlayerSide:
     def update(self, dt):
         self._elixir_timer += dt
 
-        if self._elixir_timer < self.elixirs_incriment_cooldown:
+        if self._elixir_timer < self.elixirs_increment_cooldown:
             return
 
         self._elixir_timer = 0.0
@@ -33,7 +33,15 @@ class PlayerSide:
     def spend_elixirs(self, amount):
         self.elixirs -= amount
 
+
+    def set_double_elixir_mode(self):
+        self.elixirs_increment_cooldown = 1.5
+
     
+    def set_tripple_elixir_mode(self):
+        self.elixirs_increment_cooldown = 1.0
+    
+
     def get_objects(self):
         return self.objects
 
