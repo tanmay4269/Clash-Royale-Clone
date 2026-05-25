@@ -256,6 +256,8 @@ class AdvancedEloBased_CheckpointManagement:
             self.stored_by_elo[current_elo] = []
         self.stored_by_elo[current_elo].append(self.checkpoint_counter)
 
+        print(f"Stored checkpoint with ELO {current_elo}; checkpoint idx {self.checkpoint_counter}")
+
         self.checkpoint_counter += 1
         self.score_queue.clear()
 

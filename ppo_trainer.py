@@ -14,6 +14,7 @@ import numpy as np
 
 from addict import Dict
 from rich import print
+from tqdm import tqdm
 
 import torch as t
 import torch.nn as nn
@@ -386,7 +387,11 @@ class Trainer:
             _frame_times: list[float] = []
 
             steps_collected = 0
+            pbar = tqdm(total=self.cfg.buffer.n_steps, desc="Rollout", disable=not self.profile)
+
             while steps_collected < self.cfg.buffer.n_steps:
+                steps_before = steps_collected
+
                 if global_step >= next_video:
                     self.record_episode(global_step, net_1, net_2)
                     next_video += self.video_every_k_global_steps
@@ -421,6 +426,7 @@ class Trainer:
                         truncated = False
                         info = {}
                     results = [(next_state, reward, terminated, truncated, info)]
+
                 if _is_profile_update:
                     _frame_times.append(time.perf_counter() - _frame_t0)
 
@@ -484,7 +490,10 @@ class Trainer:
                         states_1[i], states_2[i] = self.split_observations(states[i])
                         last_done[i] = False  # fresh episode start — bootstrap is valid
 
+                pbar.update(steps_collected - steps_before)
                 global_step += N
+
+            pbar.close()
 
             # Compute GAE independently per env — each buffer has a contiguous trajectory
             _gae_t0 = time.perf_counter() if _is_profile_update else None
@@ -929,6 +938,10 @@ class Trainer:
         # Keep only the 10 most recent videos (rolling window)
         videos = sorted(glob.glob(os.path.join(self.video_dir, "*.mp4")))
         for old in videos[:-10]:
+            os.remove(old)
+
+        metadatas = sorted(glob.glob(os.path.join(self.video_dir, "*.meta.json")))
+        for old in metadatas[:-10]:
             os.remove(old)
 
         if self.wandb_logging:
