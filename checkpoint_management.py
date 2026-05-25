@@ -30,7 +30,7 @@ class ConstantWindow_CheckpointManagement:
 
         checkpoint_sample = np.random.randint(checkpoint_min, checkpoint_max)
         checkpoint_path = os.path.join(self.checkpoint_dir, f"checkpoint_{checkpoint_sample}.pt")
-        net.load_state_dict(t.load(checkpoint_path, weights_only=True))
+        net.load_state_dict(t.load(checkpoint_path, map_location=None if t.cuda.is_available() else 'cpu', weights_only=True))
     
 
     def store(self, net, global_step):
@@ -67,7 +67,7 @@ class DeltaWindow_CheckpointManagement:
 
         checkpoint_sample = np.random.randint(checkpoint_min, checkpoint_max)
         checkpoint_path = os.path.join(self.checkpoint_dir, f"checkpoint_{checkpoint_sample}.pt")
-        net.load_state_dict(t.load(checkpoint_path, weights_only=True))
+        net.load_state_dict(t.load(checkpoint_path, map_location=None if t.cuda.is_available() else 'cpu', weights_only=True))
 
 
     def store(self, net, global_step):
@@ -124,7 +124,7 @@ class AdvancedTemporal_CheckpointManagement:
             checkpoint_sample = np.random.randint(checkpoint_min, checkpoint_max)
 
         checkpoint_path = os.path.join(self.checkpoint_dir, f"checkpoint_{checkpoint_sample}.pt")
-        net.load_state_dict(t.load(checkpoint_path, weights_only=True))
+        net.load_state_dict(t.load(checkpoint_path, map_location=None if t.cuda.is_available() else 'cpu', weights_only=True))
 
 
     def update(self, net, returns):
@@ -208,7 +208,7 @@ class AdvancedEloBased_CheckpointManagement:
 
             opponent_elo, checkpoint_path = self.stored_by_idx[checkpoint_sample]
 
-            net.load_state_dict(t.load(checkpoint_path, weights_only=True))
+            net.load_state_dict(t.load(checkpoint_path, map_location=None if t.cuda.is_available() else 'cpu', weights_only=True))
             return opponent_elo
 
         opponent_elos = list(self.stored_by_elo.keys())
@@ -233,7 +233,7 @@ class AdvancedEloBased_CheckpointManagement:
 
         opponent_elo, checkpoint_path = self.stored_by_idx[checkpoint_sample]
 
-        net.load_state_dict(t.load(checkpoint_path, weights_only=True))
+        net.load_state_dict(t.load(checkpoint_path, map_location=None if t.cuda.is_available() else 'cpu', weights_only=True))
         return opponent_elo
 
 
