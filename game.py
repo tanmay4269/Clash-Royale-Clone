@@ -1,15 +1,15 @@
 """
-game.py — Manual test harness for the Clash Royale arena.
+game.py: Manual test harness for the Clash Royale arena.
 
 Player 1: Human (keyboard + mouse, same as before).
 Player 2: AI bot driven by BotNet (overfit modes: random / skip / scripted).
 
 Controls
 --------
-1 / 2        — switch active player (human deploy side)
-K / G / P    — pick active card  (Knight / Giant / MiniPEKKA)
-R / S / C    — change bot mode   (Random / Skip / Scripted)
-Left-click   — deploy active card at mouse position
+1 / 2       : switch active player (human deploy side)
+K / G / P   : pick active card  (Knight / Giant / MiniPEKKA)
+R / S / C   : change bot mode   (Random / Skip / Scripted)
+Left-click  : deploy active card at mouse position
 
 Usage
 -----
@@ -174,7 +174,7 @@ class Game:
 
         pygame.init()
         self.screen  = pygame.display.set_mode((self.width, self.height))
-        pygame.display.set_caption(f"Clash Royale — vs {opponent_mode} bot")
+        pygame.display.set_caption(f"Clash Royale: vs {opponent_mode} bot")
         self.clock   = pygame.time.Clock()
         self.running = True
         self.dt      = 0
@@ -266,17 +266,17 @@ class Game:
                 elif event.key == pygame.K_r:
                     self.opponent_mode = "random"
                     self._bot = self._make_bot("random")
-                    pygame.display.set_caption("Clash Royale — vs random bot")
+                    pygame.display.set_caption("Clash Royale: vs random bot")
                     print("Bot mode → random")
                 elif event.key == pygame.K_s:
                     self.opponent_mode = "skip"
                     self._bot = self._make_bot("skip")
-                    pygame.display.set_caption("Clash Royale — vs skip bot")
+                    pygame.display.set_caption("Clash Royale: vs skip bot")
                     print("Bot mode → skip")
                 elif event.key == pygame.K_c:
                     self.opponent_mode = "scripted"
                     self._bot = self._make_bot("scripted")
-                    pygame.display.set_caption("Clash Royale — vs scripted bot")
+                    pygame.display.set_caption("Clash Royale: vs scripted bot")
                     print("Bot mode → scripted")
 
         # ── Render ────────────────────────────────────────────
@@ -293,7 +293,7 @@ class Game:
 
         # Only apply the bot's deploy (player_2); human clicks are handled by arena.on_click
         bot_action = {
-            "player_1_skip":          1,          # human side — no auto deploy
+            "player_1_skip":          1,          # human side: no auto deploy
             "player_1_card_idx":      0,
             "player_1_card_position": (0, 0),
             "player_2_skip":          joined["player_2_skip"],
@@ -326,7 +326,7 @@ class Game:
 
 # ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Manual test — play vs a bot")
+    parser = argparse.ArgumentParser(description="Manual test: play vs a bot")
     parser.add_argument(
         "--opponent",
         type=str,

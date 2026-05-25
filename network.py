@@ -163,7 +163,7 @@ class ActorCritic(nn.Module):
         elixir_mask = self.deck_deploy_costs.unsqueeze(0) > raw_elixirs  # (B, num_cards)
         deck_logits = deck_logits.masked_fill(elixir_mask, float('-inf'))
 
-        all_masked = elixir_mask.all(dim=-1)  # (B,) — can't afford anything
+        all_masked = elixir_mask.all(dim=-1)  # (B,): can't afford anything
         if all_masked.any():
             # Use large finite value, NOT inf: Bernoulli(logits=inf).log_prob() → NaN.
             skip_logits = skip_logits.masked_fill(all_masked, 20.0)
@@ -189,7 +189,7 @@ class ActorCritic(nn.Module):
         pos_log_prob  = pos_dist.log_prob(action_pos)
 
         # Use where instead of multiplication: 0.0 * -inf = NaN in PyTorch.
-        # When skipping, deck/pos choices are irrelevant — their log_probs are 0.
+        # When skipping, deck/pos choices are irrelevant: their log_probs are 0.
         is_skip = action_skip.bool()
         log_prob = skip_log_prob + t.where(is_skip, t.zeros_like(deck_log_prob), deck_log_prob + pos_log_prob)
 

@@ -116,7 +116,7 @@ class DiagnosticsLogger:
 
         With parallel envs, multiple episodes can end within the same global_step
         tick. Calling wandb.log(..., step=X) multiple times with the same X causes
-        silent overwrites — only the last call survives. Instead, we accumulate
+        silent overwrites: only the last call survives. Instead, we accumulate
         stats here and flush them as averages in on_ppo_update().
 
         episode_info: the ``info["episode"]`` dict emitted by ClashRoyaleEnv at
@@ -145,7 +145,7 @@ class DiagnosticsLogger:
 
         # Note: reset_episode_stats() is intentionally NOT called here because
         # on_episode_end_simple does not use the step-by-step accumulators
-        # (ep_decks etc.) — those live inside the env process. The buffer-level
+        # (ep_decks etc.): those live inside the env process. The buffer-level
         # accumulators above are flushed in on_ppo_update().
 
     def on_ppo_update(self, global_step, buffer, net_curr, net_init, net_prev):

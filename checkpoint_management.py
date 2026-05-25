@@ -276,7 +276,7 @@ class AdvancedEloBased_CheckpointManagement:
         """Restore internal state from a previously saved dict."""
         self.checkpoint_counter = state["checkpoint_counter"]
         self.score_queue = deque(state["score_queue"], maxlen=self._score_queue_maxlen)
-        # stored_by_idx keys are ints serialised as strings by json/pickle — normalise
+        # stored_by_idx keys are ints serialised as strings by json/pickle: normalise
         self.stored_by_idx = {
             int(k): tuple(v) for k, v in state["stored_by_idx"].items()
         }

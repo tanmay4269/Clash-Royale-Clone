@@ -15,7 +15,7 @@ class ProjectileShooter(Entity):
 
 
     def update_projectiles(self, dt):
-        # Snapshot dead projectiles first, then remove — avoids mutating list while iterating
+        # Snapshot dead projectiles first, then remove: avoids mutating list while iterating
         dead_projectiles = [proj for proj in self.projectiles if not proj.update(dt)]
         for proj in dead_projectiles:
             self.projectiles.remove(proj)

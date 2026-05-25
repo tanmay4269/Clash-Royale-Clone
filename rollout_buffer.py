@@ -117,7 +117,7 @@ class RolloutBuffer:
         filled = [b for b in buffers if b.ptr > 0]
         total = sum(b.ptr for b in filled)
 
-        # Create a shell buffer — we'll overwrite its pre-allocated tensors
+        # Create a shell buffer: we'll overwrite its pre-allocated tensors
         merged = cls(
             n_steps=total, 
             gae_gamma=filled[0].gae_gamma, 
@@ -175,7 +175,7 @@ class RolloutBuffer:
     def forced_skip_mask(self, deck_deploy_costs, max_elixirs):
         """
         Returns a bool tensor (N,) that is True for every step where the agent
-        was forced to skip — i.e. elixir < cost of every card in the deck.
+        was forced to skip: i.e. elixir < cost of every card in the deck.
         """
         states      = self.unflatten_dict(self.states[: self.ptr], self.state_shapes)
         norm_elixirs = states["elixirs"]                              # (N, 1)
@@ -188,7 +188,7 @@ class RolloutBuffer:
         """
         Remove all forced-skip steps in-place and return (n_before, n_dropped).
         After this call, self.ptr reflects the compacted size and get_minibatches
-        works unchanged — no other modifications needed.
+        works unchanged: no other modifications needed.
         """
         if self.ptr == 0 or self.state_shapes is None:
             return 0, 0

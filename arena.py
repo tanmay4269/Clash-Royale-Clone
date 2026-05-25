@@ -54,7 +54,7 @@ class Arena:
         self.player_side_1.set_opponent(self.player_side_2)
         self.player_side_2.set_opponent(self.player_side_1)
 
-        # Deploying crown towers — use list concat to preserve deterministic order
+        # Deploying crown towers: use list concat to preserve deterministic order
         towers = list(self.player_side_1.get_objects()) + list(self.player_side_2.get_objects())
         for obj in towers:
             self.deploy_entity(obj)
@@ -238,7 +238,7 @@ class Arena:
         ### Object Update and Deletion ###
 
         # Snapshot dead objects first (list comprehension = deterministic order),
-        # then delete — avoids mutating self.objects while iterating it
+        # then delete: avoids mutating self.objects while iterating it
         dead_objs = [obj for obj in self.objects if not obj.update(dt, self.cell_occupancy)]
         for obj in dead_objs:
             if obj.owner.side_index == 1:

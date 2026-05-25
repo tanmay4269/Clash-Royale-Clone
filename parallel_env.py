@@ -29,7 +29,7 @@ def _worker_fn(pipe, env_name, env_kwargs, wrapper_cls):
     Protocol:
         ("reset", seed)       -> obs
         ("step", action)      -> (obs, reward, terminated, truncated)
-        ("get_attr", name)    -> getattr(env, name) — for arena access etc.
+        ("get_attr", name)    -> getattr(env, name): for arena access etc.
         ("close", None)       -> breaks loop
     
     On error: sends ("error", traceback_string) so the parent gets a clear message

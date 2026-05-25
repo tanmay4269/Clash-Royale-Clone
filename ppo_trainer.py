@@ -38,32 +38,44 @@ import wandb
 
 class Trainer:
     def __init__(
-        self, 
-        gym_env_name, 
-        run_name=None, 
+        self,
+
+        # Run / Logging
+        gym_env_name,
+        run_name=None,
         resume_run=None,
         save_state_every=100_000,
-        use_lr_tuner=True, 
-        overfit_mode=None, 
-        wandb_logging=True, 
+
+        # Flags / Mode
+        use_lr_tuner=True,
+        overfit_mode=None,
+        wandb_logging=True,
         debug=False,
         profile=False,
+
+        # Reward Shaping
         gae_gamma=0.99,
         step_penalty=0.0,
         tower_damage_reward_scale=1/5000.0,
         tower_distruction_reward=0.5,
         winning_reward=5.0,
+
+        # Environment
         num_envs=1,
+
+        # PPO
         kl_threshold=0.01,
         kl_early_stopping=False,
         advantage_normalization_type="minibatch",
         num_ppo_epochs=40,
         drop_forced_skips=False,
         num_games_in_buffer=10,
+
+        # Optimisation
         default_lr=1.5e-4,
         minibatch_size=2048,
-):
-        # Seed first — before ANY CUDA init, gym.make, or network construction
+    ):
+        # Seed first: before ANY CUDA init, gym.make, or network construction
         self.cfg = Dict()
         self.cfg.seed = 42
         self.set_seed(self.cfg.seed)
@@ -95,7 +107,7 @@ class Trainer:
             "winning_reward": winning_reward,
         }
 
-        # Reference env — used for metadata (obs space, arena config) and video recording.
+        # Reference env: used for metadata (obs space, arena config) and video recording.
         # Parallel workers run their own independent env instances.
         self.env = gym.make(self.gym_env_name, **self.env_kwargs)
         self.env = CRFlattenNormWrapper(self.env)
@@ -113,9 +125,9 @@ class Trainer:
         
         datetime_str = time.strftime('%m%d-%H%M%S')
 
-        # ── Run directory layout ──────────────────────────────────────
-        # Resuming: the run folder already exists; we reuse its name.
-        # New run : create a new timestamped folder under runs/.
+        # Run directory layout
+        #   Resuming: the run folder already exists; we reuse its name.
+        #   New run : create a new timestamped folder under runs/.
         if resume_run:
             self.cfg.run_name = resume_run
         elif run_name:
@@ -259,60 +271,10 @@ class Trainer:
                 id=self.cfg.run_name,  # stable ID so resuming reattaches to the same wandb run
             )
 
-        # ── Weights-to-resume ─────────────────────────────────────────
-        # Stored as an attr so train() can restore the full state after
-        # network/optimiser construction.
+        # Weights-to-resume
+        #   Stored as an attr so train() can restore the full state after
+        #   network/optimiser construction.
         self._resume_run = resume_run
-
-
-    # ─────────────────────────────────────────────────────────────────
-    # Training-state persistence
-    # ─────────────────────────────────────────────────────────────────
-
-    def _training_state_path(self):
-        return os.path.join(self.run_dir, "training_state.pt")
-
-    def _save_training_state(self, global_step, net_1, optimiser_1):
-        """Persist enough state to fully resume training."""
-        state = {
-            "global_step":        global_step,
-            "current_elo":        self.current_elo,
-            "net_1_state_dict":   net_1.state_dict(),
-            "optimiser_state":    optimiser_1.state_dict(),
-            "lr_tuned":           self.lr_tuned,
-            "learning_rate":      self.learning_rate,
-            "entropy_loss_coef":  self.entropy_loss_coef,
-            "checkpoint_manager": self.checkpoint_manager.get_state(),
-        }
-        tmp_path = self._training_state_path() + ".tmp"
-        t.save(state, tmp_path)
-        os.replace(tmp_path, self._training_state_path())  # atomic write
-        print(f"(state) saved training state at step {global_step}")
-
-    def _load_training_state(self, net_1, optimiser_1):
-        """Load persisted state into an already-constructed net/optimiser.
-        Returns the global_step to resume from (0 if no state found)."""
-        path = self._training_state_path()
-        if not os.path.exists(path):
-            print(f"(state) no training_state.pt found in {self.run_dir} — starting fresh")
-            return 0
-
-        state = t.load(
-            path, 
-            weights_only=False, 
-            map_location=t.device("cpu") if not t.cuda.is_available() else t.device("cuda")
-        )
-        net_1.load_state_dict(state["net_1_state_dict"])
-        optimiser_1.load_state_dict(state["optimiser_state"])
-        self.current_elo        = state["current_elo"]
-        self.lr_tuned           = state["lr_tuned"]
-        self.learning_rate      = state["learning_rate"]
-        self.entropy_loss_coef  = state["entropy_loss_coef"]
-        self.checkpoint_manager.load_state(state["checkpoint_manager"])
-
-        global_step = state["global_step"]
-        print(f"(state) resumed from step {global_step} (elo={self.current_elo:.1f})")
-        return global_step
 
 
     def train(self):
@@ -378,7 +340,7 @@ class Trainer:
         max_updates = 2 if self.profile else self.cfg.max_steps  # sentinel reused below
 
         while global_step < self.cfg.max_steps:
-            # One buffer per env — keeps each env's trajectory contiguous for GAE
+            # One buffer per env: keeps each env's trajectory contiguous for GAE
             buffers = [RolloutBuffer(**self.cfg.buffer.to_dict()) for _ in range(N)]
 
             # --- Profile: buffer collection timing ---
@@ -488,14 +450,14 @@ class Trainer:
                         else:
                             states[i], _ = self.env.reset(seed=ep_seed)
                         states_1[i], states_2[i] = self.split_observations(states[i])
-                        last_done[i] = False  # fresh episode start — bootstrap is valid
+                        last_done[i] = False  # fresh episode start: bootstrap is valid
 
                 pbar.update(steps_collected - steps_before)
                 global_step += N
 
             pbar.close()
 
-            # Compute GAE independently per env — each buffer has a contiguous trajectory
+            # Compute GAE independently per env: each buffer has a contiguous trajectory
             _gae_t0 = time.perf_counter() if _is_profile_update else None
             with t.no_grad():
                 for i in range(N):
@@ -558,7 +520,7 @@ class Trainer:
 
             profile_update_count += 1
             if self.profile and profile_update_count >= 2:
-                print("\n(PROFILE) 2 PPO updates complete — exiting.")
+                print("\n(PROFILE) 2 PPO updates complete: exiting.")
                 break
 
             recent = ep_returns[-100:]
@@ -744,7 +706,7 @@ class Trainer:
         else:
             pre_clip_grad_norm = 0.0
 
-        # Critic weight norm — tracks if weights are drifting unbounded
+        # Critic weight norm: tracks if weights are drifting unbounded
         critic_weight_norm = sum(
             p.norm() ** 2
             for name, p in net.named_parameters()
@@ -951,6 +913,58 @@ class Trainer:
 
         return ep_return
 
+    # =================================================================
+    # Training-state persistence
+    # =================================================================
+
+    def _training_state_path(self):
+        return os.path.join(self.run_dir, "training_state.pt")
+
+
+    def _save_training_state(self, global_step, net_1, optimiser_1):
+        """Persist enough state to fully resume training."""
+        state = {
+            "global_step":        global_step,
+            "current_elo":        self.current_elo,
+            "net_1_state_dict":   net_1.state_dict(),
+            "optimiser_state":    optimiser_1.state_dict(),
+            "lr_tuned":           self.lr_tuned,
+            "learning_rate":      self.learning_rate,
+            "entropy_loss_coef":  self.entropy_loss_coef,
+            "checkpoint_manager": self.checkpoint_manager.get_state(),
+        }
+        tmp_path = self._training_state_path() + ".tmp"
+        t.save(state, tmp_path)
+        os.replace(tmp_path, self._training_state_path())  # atomic write
+        print(f"(state) saved training state at step {global_step}")
+
+
+    def _load_training_state(self, net_1, optimiser_1):
+        """Load persisted state into an already-constructed net/optimiser.
+        Returns the global_step to resume from (0 if no state found)."""
+        path = self._training_state_path()
+        if not os.path.exists(path):
+            print(f"(state) no training_state.pt found in {self.run_dir}: starting fresh")
+            return 0
+
+        state = t.load(
+            path, 
+            weights_only=False, 
+            map_location=t.device("cpu") if not t.cuda.is_available() else t.device("cuda")
+        )
+        net_1.load_state_dict(state["net_1_state_dict"])
+        optimiser_1.load_state_dict(state["optimiser_state"])
+        self.current_elo        = state["current_elo"]
+        self.lr_tuned           = state["lr_tuned"]
+        self.learning_rate      = state["learning_rate"]
+        self.entropy_loss_coef  = state["entropy_loss_coef"]
+        self.checkpoint_manager.load_state(state["checkpoint_manager"])
+
+        global_step = state["global_step"]
+        print(f"(state) resumed from step {global_step} (elo={self.current_elo:.1f})")
+        return global_step
+
+    # =================================================================
 
     def get_network_and_optimiser(self, weights=None):
         """
@@ -1067,10 +1081,12 @@ class Trainer:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train PPO for Clash Royale")
+
+    # Run / Logging
     parser.add_argument(
-        "--run_name", 
-        type=str, 
-        default=None, 
+        "--run_name",
+        type=str,
+        default=None,
         help="Prefix for the run name; date-time will be appended."
     )
     parser.add_argument(
@@ -1091,28 +1107,30 @@ if __name__ == "__main__":
         metavar="STEPS",
         help="Save a full training-state snapshot every N global env steps.",
     )
+
+    # Flags / Mode
     parser.add_argument(
-        "--use_lr_tuner", 
-        action=argparse.BooleanOptionalAction, 
-        default=False, 
+        "--use_lr_tuner",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Enable or disable LR tuner."
     )
     parser.add_argument(
-        "--overfit_mode", 
-        type=str, 
-        default=None, 
-        choices=['single-buffer', 'fixed-opponent', 'vs-random', 'vs-skip', 'vs-scripted'], 
+        "--overfit_mode",
+        type=str,
+        default=None,
+        choices=['single-buffer', 'fixed-opponent', 'vs-random', 'vs-skip', 'vs-scripted'],
         help="Overfit mode to use."
     )
     parser.add_argument(
-        "--wandb_logging", 
-        action=argparse.BooleanOptionalAction, 
-        default=True, 
+        "--wandb_logging",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Enable or disable wandb logging."
     )
     parser.add_argument(
-        "--debug", 
-        action="store_true", 
+        "--debug",
+        action="store_true",
         help="Enable debug mode."
     )
     parser.add_argument(
@@ -1120,24 +1138,60 @@ if __name__ == "__main__":
         action="store_true",
         help="Run 2 PPO updates and print detailed timing stats on the 2nd (buffer collection, frame step, GAE, PPO). Exits after."
     )
+
+    # Reward Shaping
+    parser.add_argument(
+        "--gae_gamma",
+        type=float,
+        default=0.997,
+        help="Discount factor (gamma) for GAE."
+    )
+    parser.add_argument(
+        "--step_penalty",
+        type=float,
+        default=0.0,
+        help="Penalty applied at each step. A positive value here will add its negative to each step."
+    )
+    parser.add_argument(
+        "--tower_damage_reward_scale",
+        type=float,
+        default=2e-4,
+        help="Scale for tower damage reward."
+    )
+    parser.add_argument(
+        "--tower_distruction_reward",
+        type=float,
+        default=0.5,
+        help="Reward for destroying a tower."
+    )
+    parser.add_argument(
+        "--winning_reward",
+        type=float,
+        default=5.0,
+        help="Reward for winning the game."
+    )
+
+    # Environment
     parser.add_argument(
         "--num_envs",
         type=int,
         default=8,
         help="Number of parallel env workers for rollout collection."
     )
-    parser.add_argument(
-        "--kl_early_stopping",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Enable early stopping based on KL divergence."
-    )
+
+    # PPO
     parser.add_argument(
         "--kl_threshold",
         type=float,
         default=0.01,
         metavar="KL",
         help="Max approximate KL divergence allowed per PPO update. The epoch loop exits early when exceeded. Default: 0.01."
+    )
+    parser.add_argument(
+        "--kl_early_stopping",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable early stopping based on KL divergence."
     )
     parser.add_argument(
         "--advantage_normalization_type",
@@ -1165,6 +1219,8 @@ if __name__ == "__main__":
         default=10,
         help="Number of games to keep in the rollout buffer."
     )
+
+    # Optimisation
     parser.add_argument(
         "--default_lr",
         type=float,
@@ -1178,64 +1234,41 @@ if __name__ == "__main__":
         help="Minibatch size for PPO updates."
     )
 
-    # RL Hyperparameters
-    parser.add_argument(
-        "--gae_gamma", 
-        type=float, 
-        default=0.997, 
-        help="Discount factor (gamma) for GAE."
-    )
-    
-    # Reward shaping
-    parser.add_argument(
-        "--step_penalty", 
-        type=float, 
-        default=0.0, 
-        help="Penalty applied at each step. A positive value here will add its negative to each step."
-    )
-    parser.add_argument(
-        "--tower_damage_reward_scale", 
-        type=float, 
-        default=2e-4, 
-        help="Scale for tower damage reward."
-    )
-    parser.add_argument(
-        "--tower_distruction_reward", 
-        type=float, 
-        default=0.5, 
-        help="Reward for destroying a tower."
-    )
-    parser.add_argument(
-        "--winning_reward", 
-        type=float, 
-        default=5.0, 
-        help="Reward for winning the game."
-    )
-
     args = parser.parse_args()
 
     trainer = Trainer(
+        # Run / Logging
         gym_env_name="ClashRoyaleEnv-v0",
         run_name=args.run_name,
         resume_run=args.resume_run,
         save_state_every=args.save_state_every,
+
+        # Flags / Mode
         use_lr_tuner=args.use_lr_tuner,
         overfit_mode=args.overfit_mode,
         wandb_logging=args.wandb_logging,
         debug=args.debug,
         profile=args.profile,
+
+        # Reward Shaping
         gae_gamma=args.gae_gamma,
         step_penalty=args.step_penalty,
         tower_damage_reward_scale=args.tower_damage_reward_scale,
         tower_distruction_reward=args.tower_distruction_reward,
         winning_reward=args.winning_reward,
+
+        # Environment
         num_envs=args.num_envs,
+
+        # PPO
         kl_threshold=args.kl_threshold,
         kl_early_stopping=args.kl_early_stopping,
         advantage_normalization_type=args.advantage_normalization_type,
         num_ppo_epochs=args.num_ppo_epochs,
         drop_forced_skips=args.drop_forced_skips,
         num_games_in_buffer=args.num_games_in_buffer,
+
+        # Optimisation
         default_lr=args.default_lr,
         minibatch_size=args.minibatch_size,
     )
