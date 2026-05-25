@@ -208,32 +208,73 @@ class Troop(Entity):
 
     def set_target(self, target=None):
         """
-        If no target is given, find a target using self.owner.opponent.objects
+        If no target is given, find a target using self.owner.opponent.objects.
+
+        Tower targeting rules (half-based, Clash Royale):
+          - The arena is split into left (x < ARENA_MID_X) and right halves.
+          - A troop's half is determined by its current x-position.
+          - Default navigation tower = same-half enemy princess tower if alive,
+            otherwise the king tower.
+          - Non-tower targets (troops / buildings) within visibility range always
+            take priority over the default tower.
         """
+        from entities.buildings.king_tower import KingTower as KingTowerClass
+        from entities.buildings.princess_tower import PrincessTower as PrincessTowerClass
 
         # Doesn't need to know who the target is, just knowing the location is fine
         if target:
             self.target = target
             return
 
-        # Target closest tower by default
+        opponent = self.owner.opponent
+
+        # --- Half-based default tower selection ---
+        # Arena is 18 tiles wide, tile_size=16 px → midline at x = 9*16 = 144 px.
+        ARENA_MID_X = 9 * 16  # pixels
+
+        on_left_half = self.position.x < ARENA_MID_X
+
+        # princess_tower_1 is on the left (col 3.5), princess_tower_2 on the right (col 14.5)
+        same_half_princess = (
+            opponent.princess_tower_1 if on_left_half else opponent.princess_tower_2
+        )
+
+        # Check if that princess tower is still alive (present in opponent.objects)
+        if (
+            same_half_princess is not None
+            and same_half_princess in opponent.objects
+            and same_half_princess.entity_type in self.target_types
+        ):
+            default_tower = same_half_princess
+        else:
+            # Same-half princess tower is gone → head straight for the king tower
+            default_tower = opponent.king_tower if (
+                opponent.king_tower is not None
+                and opponent.king_tower.entity_type in self.target_types
+            ) else None
+
+        # --- Scan for a closer non-tower target (troops / buildings) in range ---
         closest_obj, closest_dist = None, float('inf')
-        for obj in self.owner.opponent.objects:
+        for obj in opponent.objects:
             if obj.entity_type not in self.target_types:
                 continue
 
-            dist = (self.position - obj.position).length()
+            # Crown towers are handled via default_tower above; skip them in the
+            # proximity scan so a nearby king tower doesn't steal priority.
+            if isinstance(obj, CrownTower):
+                continue
 
-            if not isinstance(obj, CrownTower) and dist > self.visibility_cells:
+            dist = (self.position - obj.position).length()
+            if dist > self.visibility_cells:
                 continue
 
             if dist < closest_dist:
                 closest_obj = obj
                 closest_dist = dist
 
-        # assert closest_obj is not None
-
-        self.target = closest_obj
+        # Use the closest in-range non-tower target if found, otherwise fall back
+        # to the default navigation tower.
+        self.target = closest_obj if closest_obj is not None else default_tower
 
 
     def find_path(self, occupancy_grid: np.ndarray) -> bool:
