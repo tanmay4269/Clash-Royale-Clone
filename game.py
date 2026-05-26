@@ -33,7 +33,8 @@ import torch.nn.functional as F
 
 from game.utils import *
 from game.arena import Arena
-from rl.network import BotNet, ActorCritic
+from rl.networks import make_network
+from rl.networks.botnet import BotNet
 
 import gymnasium as gym
 import rl.env.cr_gym_env
@@ -155,7 +156,8 @@ def apply_action_to_arena(arena, joined_action):
 
 
 class Game:
-    def __init__(self, opponent_mode: str = "random", player_mode: str = "manual"):
+    def __init__(self, opponent_mode: str = "random", player_mode: str = "manual", network_type: str = "deep_sets"):
+        self._network_type = network_type
         self._env_raw  = gym.make("ClashRoyaleEnv-v0")
         self._env_wrap = CRFlattenNormWrapper(self._env_raw)
 
@@ -210,15 +212,13 @@ class Game:
         # Check if mode is a checkpoint path
         checkpoint_path = os.path.expanduser(mode)
         if os.path.isfile(checkpoint_path):
-            # Load ActorCritic model from checkpoint
-            network = ActorCritic(
+            network = make_network(
+                self._network_type,
                 entity_encoder_in_ch=self._env_wrap.flat_card_space.shape[0],
                 entity_encoder_mid_ch=64,
                 entity_encoder_out_ch=32,
-
                 trunk_extra_in_ch=2,
                 trunk_mid_ch=128,
-                
                 num_cards_in_deck=self._env_raw.unwrapped.NUM_CARDS_IN_DECK,
                 max_num_cards=self.arena.max_num_objects,
                 position_space_width=arena.width,
@@ -468,7 +468,14 @@ if __name__ == "__main__":
         default="manual",
         help="What does the active player do? ('manual', 'mirror' (same as opponent), 'random')"
     )
+    parser.add_argument(
+        "--network_type",
+        type=str,
+        default="deep_sets",
+        choices=['deep_sets_baseline', 'deep_sets', 'pointer', 'attention', 'transformer', 'autoregressive'],
+        help="Network architecture (must match checkpoint)."
+    )
     args = parser.parse_args()
 
-    game = Game(opponent_mode=args.opponent, player_mode=args.player_mode)
+    game = Game(opponent_mode=args.opponent, player_mode=args.player_mode, network_type=args.network_type)
     game.run()

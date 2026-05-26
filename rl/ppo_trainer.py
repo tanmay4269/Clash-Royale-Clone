@@ -21,7 +21,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from rl.network import ActorCritic, BotNet
+from rl.networks import make_network
+from rl.networks.botnet import BotNet
 
 import gymnasium as gym
 import rl.env.cr_gym_env
@@ -41,8 +42,11 @@ class Trainer:
     def __init__(
         self,
 
+        # Network
+        network_type='deep_sets',
+
         # Run / Logging
-        gym_env_name,
+        gym_env_name="ClashRoyaleEnv-v0",
         run_name=None,
         resume_run=None,
         save_state_every=100_000,
@@ -146,6 +150,8 @@ class Trainer:
         self.save_state_every = save_state_every
 
         # Network Config
+        self.cfg.network_type = network_type
+
         self.cfg.network.entity_encoder_in_ch = self.env.flat_card_space.shape[0]
         self.cfg.network.entity_encoder_mid_ch = 64
         self.cfg.network.entity_encoder_out_ch = 32
@@ -301,8 +307,8 @@ class Trainer:
             loaded_checkpoint_indices = [None] * N
             opponent_elos = [self.cfg.elo.initial_rating] * N
 
-        next_video = 0
-        # next_video = (global_step // self.video_every_k_global_steps + 1) * self.video_every_k_global_steps
+        # next_video = 0
+        next_video = (global_step // self.video_every_k_global_steps + 1) * self.video_every_k_global_steps
         next_save_state = (global_step // self.save_state_every + 1) * self.save_state_every
 
         initial_net = deepcopy(net_1)
@@ -1036,7 +1042,7 @@ class Trainer:
         inits the network with those
         """
 
-        network = ActorCritic(**self.cfg.network.to_dict())
+        network = make_network(self.cfg.network_type, **self.cfg.network.to_dict())
         
         if weights:
             network.load_state_dict(t.load(weights, weights_only=True))
@@ -1209,6 +1215,13 @@ if __name__ == "__main__":
         help="Enable or disable LR tuner."
     )
     parser.add_argument(
+        "--network_type",
+        type=str,
+        default='deep_sets',
+        choices=['deep_sets_baseline', 'deep_sets', 'pointer', 'attention', 'transformer', 'autoregressive'],
+        help="Network architecture to use."
+    )
+    parser.add_argument(
         "--overfit_mode",
         type=str,
         default=None,
@@ -1335,6 +1348,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     trainer = Trainer(
+        # Network
+        network_type=args.network_type,
+
         # Run / Logging
         gym_env_name="ClashRoyaleEnv-v0",
         run_name=args.run_name,
