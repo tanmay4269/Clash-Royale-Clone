@@ -90,6 +90,7 @@ class Entity:
         # Abstract Attributes
         self.owner = owner
         self.is_alive = True
+        self.is_targetable = True
 
         # Physical Attributes
 

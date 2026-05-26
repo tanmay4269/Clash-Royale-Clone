@@ -265,6 +265,8 @@ class Troop(Entity):
         for obj in opponent.objects:
             if not obj.has_deployed():
                 continue
+            if not obj.is_targetable:
+                continue
             if obj.entity_type not in self.target_types:
                 continue
 

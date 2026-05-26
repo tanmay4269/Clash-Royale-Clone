@@ -295,7 +295,8 @@ class Trainer:
         else:
             global_step = 0
 
-        next_video = (global_step // self.video_every_k_global_steps + 1) * self.video_every_k_global_steps
+        # next_video = (global_step // self.video_every_k_global_steps + 1) * self.video_every_k_global_steps
+        next_video = 0
         next_save_state = (global_step // self.save_state_every + 1) * self.save_state_every
 
         initial_net = deepcopy(net_1)

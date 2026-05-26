@@ -33,6 +33,8 @@ class ProjectileShooter(Entity):
         for obj in self.owner.opponent.objects:
             if not obj.has_deployed():
                 continue
+            if not obj.is_targetable:
+                continue
             delta = obj.position - self.position
             
             target_size = 0

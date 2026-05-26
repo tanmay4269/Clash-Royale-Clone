@@ -44,6 +44,7 @@ from game.entities.troops.giant      import Giant
 from game.entities.troops.mini_pekka import MiniPEKKA
 from game.entities.troops.musketeer  import Musketeer
 from game.entities.troops.archer     import Archers
+from game.entities.spells.fireball   import Fireball
 
 
 def split_observations(obs, env, arena, max_num_objects):
@@ -264,7 +265,7 @@ class Game:
         return (
             "\n=== Clash Royale Manual Test ===\n"
             "  1 / 2        -> switch deploy side (player 1 / 2)\n"
-            "  K / G / P / M / A -> set card  (Knight / Giant / MiniPEKKA / Musketeer / Archers)\n"
+            "  K / G / P / M / A / F -> set card  (Knight / Giant / MiniPEKKA / Musketeer / Archers / Fireball)\n"
             "  R / S / C    -> bot mode  (Random / Skip / Scripted)\n"
             "  Left-click   -> deploy card\n"
             "================================\n"
@@ -380,13 +381,14 @@ class Game:
                     print("Active player -> 2")
 
                 # Card selection
-                elif event.key in [pygame.K_k, pygame.K_g, pygame.K_p, pygame.K_m, pygame.K_a]:
+                elif event.key in [pygame.K_k, pygame.K_g, pygame.K_p, pygame.K_m, pygame.K_a, pygame.K_f]:
                     key_map = {
                         pygame.K_k: Knight,
                         pygame.K_g: Giant,
                         pygame.K_p: MiniPEKKA,
                         pygame.K_m: Musketeer,
                         pygame.K_a: Archers,
+                        pygame.K_f: Fireball,
                     }
                     card_cls = key_map[event.key]
                     owner = self.arena.player_side_1 if self.arena._debug_active_player == 1 else self.arena.player_side_2

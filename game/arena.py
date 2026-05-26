@@ -193,6 +193,7 @@ class Arena:
             "MiniPEKKA": {"char": "P", "cost": 4, "color": (220, 40, 40)},
             "Musketeer": {"char": "M", "cost": 4, "color": (160, 80, 220)},
             "Archers": {"char": "A", "cost": 3, "color": (40, 200, 80)},
+            "Fireball": {"char": "F", "cost": 4, "color": (255, 69, 0)},
         }
 
         # Fonts
