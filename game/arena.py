@@ -119,17 +119,17 @@ class Arena:
         for obj in self.deploy_buffer:
             obj.render(screen)
 
-        
         # Highlighted cell under the cursor
         if pygame.display.get_init():
             (mouse_x, mouse_y) = pygame.mouse.get_pos()
             tile_x = mouse_x // self.tile_size
             tile_y = mouse_y // self.tile_size
 
-            surface = pygame.Surface((self.tile_size, self.tile_size))
-            surface.set_alpha(127)
-            surface.fill((128, 128, 128))
-            screen.blit(surface, (tile_x * self.tile_size, tile_y * self.tile_size))
+            if 0 <= tile_x < self.width and 0 <= tile_y < self.height:
+                surface = pygame.Surface((self.tile_size, self.tile_size))
+                surface.set_alpha(127)
+                surface.fill((128, 128, 128))
+                screen.blit(surface, (tile_x * self.tile_size, tile_y * self.tile_size))
 
         # HUD: mode indicator (top left) | E: X  MM:SS (top right) | E: X (bottom left)
         if self._font is None:
@@ -170,7 +170,142 @@ class Arena:
         # Player 2 elixir — bottom left
         elixir_text_2 = self._font.render(f"E: {self.player_side_2.elixirs:.0f}", True, (220, 220, 220))
         screen.blit(elixir_text_2, (4, screen_h - elixir_text_2.get_height() - 4))
- 
+
+        # Draw the right side deck/hand HUD panel
+        self.draw_hud_panel(screen)
+
+    def draw_hud_panel(self, screen) -> None:
+        # Draw panel background
+        panel_rect = pygame.Rect(self.width * self.tile_size, 0, 200, self.height * self.tile_size)
+        pygame.draw.rect(screen, (24, 24, 28), panel_rect)
+        pygame.draw.line(screen, (80, 80, 80), (self.width * self.tile_size, 0), (self.width * self.tile_size, self.height * self.tile_size), 2)
+
+        # Card metadata
+        CARD_INFO = {
+            "Knight": {"char": "K", "cost": 3, "color": (0, 180, 255)},
+            "Giant": {"char": "G", "cost": 5, "color": (230, 160, 0)},
+            "MiniPEKKA": {"char": "P", "cost": 4, "color": (220, 40, 40)},
+            "Musketeer": {"char": "M", "cost": 4, "color": (160, 80, 220)},
+            "Archers": {"char": "A", "cost": 3, "color": (40, 200, 80)},
+        }
+
+        # Fonts
+        title_font = pygame.font.SysFont(None, 16, bold=True)
+        small_font = pygame.font.SysFont(None, 12)
+        badge_font = pygame.font.SysFont(None, 10, bold=True)
+
+        # Draw Player 2 HUD (Opponent, top half)
+        self._draw_player_hud_block(screen, self.player_side_2, 2, 20, CARD_INFO, title_font, small_font, badge_font)
+
+        # Draw Player 1 HUD (Human, bottom half)
+        self._draw_player_hud_block(screen, self.player_side_1, 1, 320, CARD_INFO, title_font, small_font, badge_font)
+
+    def _draw_player_hud_block(self, screen, player, player_idx, y_offset, card_info, title_font, small_font, badge_font):
+        # 1. Header Text
+        title_text = f"PLAYER {player_idx}"
+        is_active = (self._debug_active_player == player_idx)
+        title_color = (255, 215, 0) if is_active else (180, 180, 180)
+        title_surface = title_font.render(title_text, True, title_color)
+        screen.blit(title_surface, (295, y_offset))
+
+        # Active indicator bullet
+        if is_active:
+            pygame.draw.circle(screen, (0, 255, 100), (370, y_offset + 6), 4)
+
+        # 2. Elixir Text & Progress Bar
+        elixir_val = player.elixirs
+        elixir_text = f"Elixir: {elixir_val:.1f}"
+        elixir_surface = small_font.render(elixir_text, True, (200, 200, 200))
+        screen.blit(elixir_surface, (295, y_offset + 18))
+
+        # Elixir Bar background
+        bar_x, bar_y, bar_w, bar_h = 295, y_offset + 32, 180, 8
+        pygame.draw.rect(screen, (40, 20, 50), (bar_x, bar_y, bar_w, bar_h), border_radius=3)
+        # Elixir Bar fill
+        fill_w = int(bar_w * (elixir_val / player.max_elixirs))
+        if fill_w > 0:
+            pygame.draw.rect(screen, (220, 50, 220), (bar_x, bar_y, fill_w, bar_h), border_radius=3)
+        pygame.draw.rect(screen, (100, 100, 100), (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=3)
+
+        # 3. 4 Hand Cards
+        card_y = y_offset + 48
+        for i, card_cls in enumerate(player.hand):
+            card_name = card_cls.__name__
+            info = card_info.get(card_name, {"char": "?", "cost": 0, "color": (128, 128, 128)})
+            char = info["char"]
+            cost = info["cost"]
+            color = info["color"]
+
+            card_x = 295 + i * 36
+            card_w, card_h = 30, 42
+            card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
+
+            # Check if active selection
+            is_selected = (player.active_card_idx == i)
+
+            # Draw card slot background
+            bg_color = (40, 40, 45) if elixir_val < cost else (55, 55, 65)
+            pygame.draw.rect(screen, bg_color, card_rect, border_radius=4)
+
+            # Elixir fill animation
+            if elixir_val < cost:
+                fill_fraction = elixir_val / cost
+                fill_height = int(card_h * fill_fraction)
+                if fill_height > 0:
+                    # Draw purple fill from bottom
+                    fill_rect = pygame.Rect(card_x, card_y + card_h - fill_height, card_w, fill_height)
+                    pygame.draw.rect(screen, (120, 40, 150), fill_rect, border_radius=4)
+            else:
+                # Fully charged card background highlight
+                # Draw a subtle tint of the card's theme color
+                tint_surface = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+                tint_surface.fill((*color, 40)) # 40/255 opacity tint
+                screen.blit(tint_surface, (card_x, card_y))
+
+            # Selected Border (Glowing)
+            if is_selected:
+                pygame.draw.rect(screen, (0, 255, 255), (card_x - 1, card_y - 1, card_w + 2, card_h + 2), width=2, border_radius=4)
+            else:
+                pygame.draw.rect(screen, (100, 100, 100), card_rect, width=1, border_radius=4)
+
+            # Card Letter
+            letter_surface = title_font.render(char, True, color)
+            letter_x = card_x + (card_w - letter_surface.get_width()) // 2
+            letter_y = card_y + (card_h - letter_surface.get_height()) // 2
+            screen.blit(letter_surface, (letter_x, letter_y))
+
+            # Cost Badge in top-right
+            badge_rect = pygame.Rect(card_x + card_w - 9, card_y - 3, 12, 12)
+            pygame.draw.circle(screen, (120, 20, 180), badge_rect.center, 6)
+            cost_surface = badge_font.render(str(cost), True, (255, 255, 255))
+            cost_x = badge_rect.center[0] - cost_surface.get_width() // 2
+            cost_y = badge_rect.center[1] - cost_surface.get_height() // 2
+            screen.blit(cost_surface, (cost_x, cost_y))
+
+        # 4. Next Card Slot
+        next_x = 295 + 4 * 36 + 6
+        next_y = card_y + 6
+        next_w, next_h = 22, 30
+        next_rect = pygame.Rect(next_x, next_y, next_w, next_h)
+
+        # Label "NEXT"
+        next_label = small_font.render("NEXT", True, (150, 150, 150))
+        screen.blit(next_label, (next_x - 2, next_y - 12))
+
+        # Draw Next Card slot background
+        pygame.draw.rect(screen, (30, 30, 35), next_rect, border_radius=3)
+        pygame.draw.rect(screen, (70, 70, 70), next_rect, width=1, border_radius=3)
+
+        if player.next_card:
+            next_name = player.next_card.__name__
+            info = card_info.get(next_name, {"char": "?", "cost": 0, "color": (128, 128, 128)})
+            char = info["char"]
+            color = info["color"]
+
+            next_letter_surface = small_font.render(char, True, color)
+            next_letter_x = next_x + (next_w - next_letter_surface.get_width()) // 2
+            next_letter_y = next_y + (next_h - next_letter_surface.get_height()) // 2
+            screen.blit(next_letter_surface, (next_letter_x, next_letter_y))
 
     def update(self, dt) -> Tuple[bool, bool]:
         """
@@ -368,26 +503,21 @@ class Arena:
             elif hp2 > hp1:
                 self.winner = 2
             # else: true draw, winner stays None
-
-
     def on_click(self) -> None:
-
         (mouse_x, mouse_y) = pygame.mouse.get_pos()
         tile_row = mouse_y // self.tile_size
         tile_col = mouse_x // self.tile_size
 
-        # * DEBUG * 
-        owner = None
-        if self._debug_active_player == 1:
-            troop = self._debug_active_card(self.player_side_1, tile_row + 1, tile_col + 1)
-            owner = self.player_side_1
-        else:
-            troop = self._debug_active_card(self.player_side_2, tile_row + 1, tile_col + 1)
-            owner = self.player_side_2
-        
+        owner = self.player_side_1 if self._debug_active_player == 1 else self.player_side_2
+        if owner.active_card_idx is None:
+            return
+
+        card_cls = owner.hand[owner.active_card_idx]
+        troop = card_cls(owner, tile_row + 1, tile_col + 1)
+
         if self.deploy_entity(troop):
             owner.add_object(troop)
-
+            owner.use_card(owner.active_card_idx)
 
     def deploy_entity(self, deploy_me: Entity) -> bool:
         """

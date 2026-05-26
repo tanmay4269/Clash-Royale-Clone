@@ -162,12 +162,12 @@ class Game:
         self.player_mode   = player_mode
         self._player_2_bot = self._make_bot(opponent_mode)
         self._player_1_bot = self._make_bot(player_mode) if player_mode != "manual" else None
-
         self.width  = self.arena.width  * self.arena.tile_size
         self.height = self.arena.height * self.arena.tile_size
 
+        PANEL_WIDTH = 200
         pygame.init()
-        self.screen  = pygame.display.set_mode((self.width, self.height))
+        self.screen  = pygame.display.set_mode((self.width + PANEL_WIDTH, self.height))
         pygame.display.set_caption(f"Clash Royale: vs {opponent_mode} bot")
         self.clock   = pygame.time.Clock()
         self.running = True
@@ -176,8 +176,11 @@ class Game:
         self.arena._debug_active_player = 1
         self.arena._debug_active_card   = Knight
 
-        print(self._help_text())
+        # Set default active card index to 0
+        self.arena.player_side_1.active_card_idx = 0
+        self.arena.player_side_2.active_card_idx = 0
 
+        print(self._help_text())
     def _make_bot(self, mode: str) -> BotNet:
         arena = self.arena
         scale            = arena.tile_size
@@ -335,7 +338,25 @@ class Game:
                 self.running = False
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                self.arena.on_click()
+                mouse_x, mouse_y = event.pos
+                if mouse_x >= self.width:
+                    # Click inside the panel
+                    # Player 2 card check (drawn at y_offset = 20, card_y = 68, card_h = 42)
+                    if 68 <= mouse_y <= 110:
+                        idx = (mouse_x - 295) // 36
+                        if 0 <= idx <= 3:
+                            self.arena.player_side_2.active_card_idx = idx
+                            self.arena._debug_active_player = 2
+                            print(f"Selected Player 2 Card {idx}: {self.arena.player_side_2.hand[idx].__name__}")
+                    # Player 1 card check (drawn at y_offset = 320, card_y = 368, card_h = 42)
+                    elif 368 <= mouse_y <= 410:
+                        idx = (mouse_x - 295) // 36
+                        if 0 <= idx <= 3:
+                            self.arena.player_side_1.active_card_idx = idx
+                            self.arena._debug_active_player = 1
+                            print(f"Selected Player 1 Card {idx}: {self.arena.player_side_1.hand[idx].__name__}")
+                else:
+                    self.arena.on_click()
 
             elif event.type == pygame.KEYDOWN:
                 # Player-side selection
@@ -347,21 +368,21 @@ class Game:
                     print("Active player -> 2")
 
                 # Card selection
-                elif event.key == pygame.K_k:
-                    self.arena._debug_active_card = Knight
-                    print("Active card -> Knight")
-                elif event.key == pygame.K_g:
-                    self.arena._debug_active_card = Giant
-                    print("Active card -> Giant")
-                elif event.key == pygame.K_p:
-                    self.arena._debug_active_card = MiniPEKKA
-                    print("Active card -> MiniPEKKA")
-                elif event.key == pygame.K_m:
-                    self.arena._debug_active_card = Musketeer
-                    print("Active card -> Musketeer")
-                elif event.key == pygame.K_a:
-                    self.arena._debug_active_card = Archers
-                    print("Active card -> Archers")
+                elif event.key in [pygame.K_k, pygame.K_g, pygame.K_p, pygame.K_m, pygame.K_a]:
+                    key_map = {
+                        pygame.K_k: Knight,
+                        pygame.K_g: Giant,
+                        pygame.K_p: MiniPEKKA,
+                        pygame.K_m: Musketeer,
+                        pygame.K_a: Archers,
+                    }
+                    card_cls = key_map[event.key]
+                    owner = self.arena.player_side_1 if self.arena._debug_active_player == 1 else self.arena.player_side_2
+                    if card_cls in owner.hand:
+                        owner.active_card_idx = owner.hand.index(card_cls)
+                        print(f"Active card -> {card_cls.__name__} (idx {owner.active_card_idx})")
+                    else:
+                        print(f"Card {card_cls.__name__} not in Player {self.arena._debug_active_player}'s hand!")
 
         self.arena.render(self.screen)
 
