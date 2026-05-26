@@ -121,15 +121,20 @@ class Arena:
 
         # Highlighted cell under the cursor
         if pygame.display.get_init():
-            (mouse_x, mouse_y) = pygame.mouse.get_pos()
-            tile_x = mouse_x // self.tile_size
-            tile_y = mouse_y // self.tile_size
+            display_surf = pygame.display.get_surface()
+            if display_surf is not None:
+                (m_x, m_y) = pygame.mouse.get_pos()
+                scale = display_surf.get_width() / screen.get_width()
+                mouse_x = int(m_x / scale)
+                mouse_y = int(m_y / scale)
+                tile_x = mouse_x // self.tile_size
+                tile_y = mouse_y // self.tile_size
 
-            if 0 <= tile_x < self.width and 0 <= tile_y < self.height:
-                surface = pygame.Surface((self.tile_size, self.tile_size))
-                surface.set_alpha(127)
-                surface.fill((128, 128, 128))
-                screen.blit(surface, (tile_x * self.tile_size, tile_y * self.tile_size))
+                if 0 <= tile_x < self.width and 0 <= tile_y < self.height:
+                    surface = pygame.Surface((self.tile_size, self.tile_size))
+                    surface.set_alpha(127)
+                    surface.fill((128, 128, 128))
+                    screen.blit(surface, (tile_x * self.tile_size, tile_y * self.tile_size))
 
         # HUD: mode indicator (top left) | E: X  MM:SS (top right) | E: X (bottom left)
         if self._font is None:
@@ -174,6 +179,7 @@ class Arena:
         # Draw the right side deck/hand HUD panel
         self.draw_hud_panel(screen)
 
+
     def draw_hud_panel(self, screen) -> None:
         # Draw panel background
         panel_rect = pygame.Rect(self.width * self.tile_size, 0, 200, self.height * self.tile_size)
@@ -193,12 +199,13 @@ class Arena:
         title_font = pygame.font.SysFont(None, 16, bold=True)
         small_font = pygame.font.SysFont(None, 12)
         badge_font = pygame.font.SysFont(None, 10, bold=True)
+        
+        # Draw Player 1 HUD (Human, top half)
+        self._draw_player_hud_block(screen, self.player_side_1, 1, 20, CARD_INFO, title_font, small_font, badge_font)
 
-        # Draw Player 2 HUD (Opponent, top half)
-        self._draw_player_hud_block(screen, self.player_side_2, 2, 20, CARD_INFO, title_font, small_font, badge_font)
+        # Draw Player 2 HUD (Opponent, bottom half)
+        self._draw_player_hud_block(screen, self.player_side_2, 2, 320, CARD_INFO, title_font, small_font, badge_font)
 
-        # Draw Player 1 HUD (Human, bottom half)
-        self._draw_player_hud_block(screen, self.player_side_1, 1, 320, CARD_INFO, title_font, small_font, badge_font)
 
     def _draw_player_hud_block(self, screen, player, player_idx, y_offset, card_info, title_font, small_font, badge_font):
         # 1. Header Text
@@ -221,6 +228,7 @@ class Arena:
         # Elixir Bar background
         bar_x, bar_y, bar_w, bar_h = 295, y_offset + 32, 180, 8
         pygame.draw.rect(screen, (40, 20, 50), (bar_x, bar_y, bar_w, bar_h), border_radius=3)
+
         # Elixir Bar fill
         fill_w = int(bar_w * (elixir_val / player.max_elixirs))
         if fill_w > 0:
@@ -306,6 +314,7 @@ class Arena:
             next_letter_x = next_x + (next_w - next_letter_surface.get_width()) // 2
             next_letter_y = next_y + (next_h - next_letter_surface.get_height()) // 2
             screen.blit(next_letter_surface, (next_letter_x, next_letter_y))
+
 
     def update(self, dt) -> Tuple[bool, bool]:
         """
@@ -503,11 +512,22 @@ class Arena:
             elif hp2 > hp1:
                 self.winner = 2
             # else: true draw, winner stays None
-    def on_click(self) -> None:
-        (mouse_x, mouse_y) = pygame.mouse.get_pos()
+    
+
+    def on_click(self, mouse_pos=None) -> None:
+        if mouse_pos is None:
+            (m_x, m_y) = pygame.mouse.get_pos()
+            display_surf = pygame.display.get_surface()
+            if display_surf is not None:
+                scale = display_surf.get_width() / (self.width * self.tile_size + 200)
+                mouse_x = int(m_x / scale)
+                mouse_y = int(m_y / scale)
+            else:
+                mouse_x, mouse_y = m_x, m_y
+        else:
+            (mouse_x, mouse_y) = mouse_pos
         tile_row = mouse_y // self.tile_size
         tile_col = mouse_x // self.tile_size
-
         owner = self.player_side_1 if self._debug_active_player == 1 else self.player_side_2
         if owner.active_card_idx is None:
             return
@@ -518,6 +538,7 @@ class Arena:
         if self.deploy_entity(troop):
             owner.add_object(troop)
             owner.use_card(owner.active_card_idx)
+
 
     def deploy_entity(self, deploy_me: Entity) -> bool:
         """

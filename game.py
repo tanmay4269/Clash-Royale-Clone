@@ -162,12 +162,21 @@ class Game:
         self.player_mode   = player_mode
         self._player_2_bot = self._make_bot(opponent_mode)
         self._player_1_bot = self._make_bot(player_mode) if player_mode != "manual" else None
+
         self.width  = self.arena.width  * self.arena.tile_size
         self.height = self.arena.height * self.arena.tile_size
 
         PANEL_WIDTH = 200
+        self.virtual_width = self.width + PANEL_WIDTH
+        self.virtual_height = self.height
+        self.scale_factor = 1.5
+
         pygame.init()
-        self.screen  = pygame.display.set_mode((self.width + PANEL_WIDTH, self.height))
+        self.window_width = int(self.virtual_width * self.scale_factor)
+        self.window_height = int(self.virtual_height * self.scale_factor)
+
+        self.screen  = pygame.display.set_mode((self.window_width, self.window_height))
+        self.virtual_screen = pygame.Surface((self.virtual_width, self.virtual_height))
         pygame.display.set_caption(f"Clash Royale: vs {opponent_mode} bot")
         self.clock   = pygame.time.Clock()
         self.running = True
@@ -338,26 +347,29 @@ class Game:
                 self.running = False
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mouse_x, mouse_y = event.pos
+                scaled_x, scaled_y = event.pos
+                mouse_x = int(scaled_x / self.scale_factor)
+                mouse_y = int(scaled_y / self.scale_factor)
+
                 if mouse_x >= self.width:
                     # Click inside the panel
-                    # Player 2 card check (drawn at y_offset = 20, card_y = 68, card_h = 42)
+                    # Player 1 card check (drawn at y_offset = 20, card_y = 68, card_h = 42)
                     if 68 <= mouse_y <= 110:
-                        idx = (mouse_x - 295) // 36
-                        if 0 <= idx <= 3:
-                            self.arena.player_side_2.active_card_idx = idx
-                            self.arena._debug_active_player = 2
-                            print(f"Selected Player 2 Card {idx}: {self.arena.player_side_2.hand[idx].__name__}")
-                    # Player 1 card check (drawn at y_offset = 320, card_y = 368, card_h = 42)
-                    elif 368 <= mouse_y <= 410:
                         idx = (mouse_x - 295) // 36
                         if 0 <= idx <= 3:
                             self.arena.player_side_1.active_card_idx = idx
                             self.arena._debug_active_player = 1
                             print(f"Selected Player 1 Card {idx}: {self.arena.player_side_1.hand[idx].__name__}")
-                else:
-                    self.arena.on_click()
 
+                    # Player 2 card check (drawn at y_offset = 320, card_y = 368, card_h = 42)
+                    elif 368 <= mouse_y <= 410:
+                        idx = (mouse_x - 295) // 36
+                        if 0 <= idx <= 3:
+                            self.arena.player_side_2.active_card_idx = idx
+                            self.arena._debug_active_player = 2
+                            print(f"Selected Player 2 Card {idx}: {self.arena.player_side_2.hand[idx].__name__}")
+                else:
+                    self.arena.on_click((mouse_x, mouse_y))
             elif event.type == pygame.KEYDOWN:
                 # Player-side selection
                 if event.key == pygame.K_1:
@@ -384,8 +396,7 @@ class Game:
                     else:
                         print(f"Card {card_cls.__name__} not in Player {self.arena._debug_active_player}'s hand!")
 
-        self.arena.render(self.screen)
-
+        self.arena.render(self.virtual_screen)
         obs_wrapped = self._get_obs_wrapped()
         action_2    = self._player_2_bot_action(obs_wrapped)
 
@@ -415,6 +426,9 @@ class Game:
             self.running = False
             return
 
+        # Scale and draw virtual screen to physical window screen
+        scaled_surface = pygame.transform.scale(self.virtual_screen, (self.window_width, self.window_height))
+        self.screen.blit(scaled_surface, (0, 0))
         pygame.display.flip()
         self.dt = self.clock.tick(60) / 1000
 
