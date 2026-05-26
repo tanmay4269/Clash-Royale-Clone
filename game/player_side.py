@@ -1,6 +1,7 @@
 from game.entities.buildings.king_tower import KingTower
 from game.entities.buildings.princess_tower import PrincessTower
 from typing import List
+from collections import deque
 
 
 class PlayerSide:
@@ -42,7 +43,8 @@ class PlayerSide:
         shuffled = list(self.deck)
         random.shuffle(shuffled)
         self.hand = shuffled[:4]
-        self.next_card = shuffled[4]
+        self.card_queue = deque(shuffled[4:])
+        self.next_card = self.card_queue[0]
         self.active_card_idx = None
 
     def use_card(self, card_idx):
@@ -53,15 +55,14 @@ class PlayerSide:
         used_card = self.hand[card_idx]
         
         # Move next_card into hand at card_idx
-        self.hand[card_idx] = self.next_card
+        new_card = self.card_queue.popleft()
+        self.hand[card_idx] = new_card
         
-        # Sample a new next_card from deck that is NOT in the hand.
-        import random
-        pool = [c for c in self.deck if c not in self.hand]
-        if pool:
-            self.next_card = random.choice(pool)
-        else:
-            self.next_card = used_card
+        # Append used card to the back of the queue (dequeue)
+        self.card_queue.append(used_card)
+        
+        # Update next_card
+        self.next_card = self.card_queue[0]
         
         # Clear active card selection
         self.active_card_idx = None
