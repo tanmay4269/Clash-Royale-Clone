@@ -294,27 +294,46 @@ class Trainer:
         # Restore full training state if this is a resumed run
         if self._resume_run:
             global_step = self._load_training_state(net_1, optimiser_1)
+            loaded_checkpoint_indices = self.loaded_checkpoint_indices
+            opponent_elos = self.opponent_elos
         else:
             global_step = 0
+            loaded_checkpoint_indices = [None] * N
+            opponent_elos = [self.cfg.elo.initial_rating] * N
 
         next_video = 0
         # next_video = (global_step // self.video_every_k_global_steps + 1) * self.video_every_k_global_steps
         next_save_state = (global_step // self.save_state_every + 1) * self.save_state_every
 
         initial_net = deepcopy(net_1)
-        opponent_elo = self.cfg.elo.initial_rating
         
         if self.overfit_mode in ['vs-random', 'vs-skip', 'vs-scripted']:
             bot_type = self.overfit_mode.split('-')[1]
-            net_2 = BotNet(
-                bot_type,
-                self.cfg.network.invalid_position_mask, 
-                self.cfg.network.num_cards_in_deck, 
-                self.cfg.network.position_space_width,
-                self.cfg.network.position_space_height
-            )
+            net_2_list = [
+                BotNet(
+                    bot_type,
+                    self.cfg.network.invalid_position_mask, 
+                    self.cfg.network.num_cards_in_deck, 
+                    self.cfg.network.position_space_width,
+                    self.cfg.network.position_space_height
+                ) for _ in range(N)
+            ]
         else:
-            net_2 = deepcopy(net_1)
+            net_2_list = [deepcopy(net_1) for _ in range(N)]
+            if not self.overfit_mode:
+                # If resuming or starting, initialize net_2_list by loading appropriate checkpoints
+                for i in range(N):
+                    ckpt_idx = loaded_checkpoint_indices[i]
+                    if ckpt_idx is not None and ckpt_idx in self.checkpoint_manager.stored_by_idx:
+                        elo, filename = self.checkpoint_manager.stored_by_idx[ckpt_idx]
+                        checkpoint_path = os.path.join(self.checkpoint_manager.checkpoint_dir, filename)
+                        net_2_list[i].load_state_dict(t.load(checkpoint_path, map_location=None if t.cuda.is_available() else 'cpu', weights_only=True))
+                        opponent_elos[i] = elo
+                    else:
+                        other_active = {loaded_checkpoint_indices[j] for j in range(N) if j != i and loaded_checkpoint_indices[j] is not None}
+                        opponent_elos[i], loaded_checkpoint_indices[i] = self.checkpoint_manager.load(
+                            net_2_list[i], self.current_elo, active_checkpoints=other_active
+                        )
 
         # --- Parallel env setup ---
         if N > 1:
@@ -362,7 +381,7 @@ class Trainer:
                 steps_before = steps_collected
 
                 if global_step >= next_video:
-                    self.record_episode(global_step, net_1, net_2)
+                    self.record_episode(global_step, net_1, net_2_list[0])
                     next_video += self.video_every_k_global_steps
 
                 # --- Get actions for all envs ---
@@ -376,7 +395,7 @@ class Trainer:
                         obs_1 = self._normalize_obs(states_1[i])
                         obs_2 = self._normalize_obs(states_2[i])
                         actions_2[i], log_probs_2[i], _, values_2[i] = net_1.get_action_and_value(obs_2)
-                        actions_1[i], _, _, _ = net_2.get_action_and_value(obs_1)
+                        actions_1[i], _, _, _ = net_2_list[i].get_action_and_value(obs_1)
 
                 # --- Build joined actions ---
                 joined_actions = [self.join_actions(actions_1[i], actions_2[i]) for i in range(N)]
@@ -434,8 +453,13 @@ class Trainer:
                             score = 0.5
 
                         # ELO update
-                        E_A = 1 / (1 + 10 ** ((opponent_elo - self.current_elo) / self.cfg.elo.scale))
+                        E_A = 1 / (1 + 10 ** ((opponent_elos[i] - self.current_elo) / self.cfg.elo.scale))
                         self.current_elo = self.current_elo + self.cfg.elo.k_factor * (score - E_A)
+
+                        # Update checkpoint ELO rating on disk using rename
+                        ckpt_idx = loaded_checkpoint_indices[i]
+                        if ckpt_idx is not None and self.cfg.checkpoint_manager_type == 'elo_based':
+                            self.checkpoint_manager.update_checkpoint_elo(ckpt_idx, 1.0 - score, self.current_elo)
 
                         # Pass episode_info (tower kills, elixir, deck/pos histograms) from the env
                         episode_info = info.get("episode", None)
@@ -450,7 +474,11 @@ class Trainer:
 
                         ep_seed = self.cfg.seed
                         if self.overfit_mode not in ['fixed-opponent', 'vs-random', 'vs-skip', 'vs-scripted']:
-                            opponent_elo = self.checkpoint_manager.load(net_2, self.current_elo)
+                            other_active = {loaded_checkpoint_indices[j] for j in range(N) if j != i and loaded_checkpoint_indices[j] is not None}
+                            opponent_elos[i], loaded_checkpoint_indices[i] = self.checkpoint_manager.load(
+                                net_2_list[i], self.current_elo, active_checkpoints=other_active
+                            )
+                            # Potentially store a new checkpoint of net_1
                             self.checkpoint_manager.update(net_1, score, self.current_elo)
                             ep_seed = np.random.randint(0, 2**31)
 
@@ -578,7 +606,7 @@ class Trainer:
 
             # Periodic full training-state checkpoint
             if global_step >= next_save_state:
-                self._save_training_state(global_step, net_1, optimiser_1)
+                self._save_training_state(global_step, net_1, optimiser_1, loaded_checkpoint_indices, opponent_elos)
                 next_save_state = global_step + self.save_state_every
 
 
@@ -952,7 +980,7 @@ class Trainer:
         return os.path.join(self.run_dir, "training_state.pt")
 
 
-    def _save_training_state(self, global_step, net_1, optimiser_1):
+    def _save_training_state(self, global_step, net_1, optimiser_1, loaded_checkpoint_indices, opponent_elos):
         """Persist enough state to fully resume training."""
         state = {
             "global_step":        global_step,
@@ -963,6 +991,8 @@ class Trainer:
             "learning_rate":      self.learning_rate,
             "entropy_loss_coef":  self.entropy_loss_coef,
             "checkpoint_manager": self.checkpoint_manager.get_state(),
+            "loaded_checkpoint_indices": loaded_checkpoint_indices,
+            "opponent_elos":             opponent_elos,
         }
         tmp_path = self._training_state_path() + ".tmp"
         t.save(state, tmp_path)
@@ -990,6 +1020,9 @@ class Trainer:
         self.learning_rate      = state["learning_rate"]
         self.entropy_loss_coef  = state["entropy_loss_coef"]
         self.checkpoint_manager.load_state(state["checkpoint_manager"])
+        
+        self.loaded_checkpoint_indices = state.get("loaded_checkpoint_indices", [None] * self.num_envs)
+        self.opponent_elos = state.get("opponent_elos", [self.cfg.elo.initial_rating] * self.num_envs)
 
         global_step = state["global_step"]
         print(f"(state) resumed from step {global_step} (elo={self.current_elo:.1f})")
