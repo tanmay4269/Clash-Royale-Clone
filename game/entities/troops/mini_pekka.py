@@ -16,7 +16,8 @@ class MiniPEKKA(Troop):
             damage=755,
             attack_radius=Troop.AttackRadius.MELEE_SHORT,
             hit_speed=1.6, first_hit_speed=0.5,
-            target_types=EntityType.get_all(),
+            # target_types=EntityType.get_all(),
+            target_types=set({EntityType.GROUND, EntityType.BUILDING}),
         )
         
 
@@ -29,5 +30,5 @@ class MiniPEKKA(Troop):
         super().render(screen, color)
 
         font = pygame.font.SysFont(None, 12)
-        text = font.render("M", True, (0, 0, 0))  # text, antialias, color
+        text = font.render("P", True, (0, 0, 0))  # text, antialias, color
         screen.blit(text, self.position - Vector2(3, 14))

@@ -16,7 +16,8 @@ class Knight(Troop):
             damage=202,
             attack_radius=Troop.AttackRadius.MELEE_MEDIUM,
             hit_speed=1.2, first_hit_speed=0.5,
-            target_types=EntityType.get_all(),
+            # target_types=EntityType.get_all(),
+            target_types=set({EntityType.GROUND, EntityType.BUILDING}),
         )
         
         # self.sprite = pygame.image.load("assets/knight.png")

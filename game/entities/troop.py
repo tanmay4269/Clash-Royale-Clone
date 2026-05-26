@@ -68,6 +68,8 @@ class Troop(Entity):
         
         # Navigation Attributes
         self.target = None  # Entity or None
+        self._cached_target_entity = None
+        self._cached_target_cell = None
         self.waypoint_reached_dist = 1.0
         self.waypoints = deque()  # left to right is the traversal pattern. self.find_path populates this and update pops from this
 
@@ -166,8 +168,11 @@ class Troop(Entity):
             target_size = self.target.size
 
         # Check target proximity
+        is_ranged = self.attack_radius_cells > 32
+        eff_target_size = 0 if (is_ranged and isinstance(self.target.size, Vector2)) else target_size
+
         found_path = False
-        if (self.position - self.target.position).length() > self.attack_radius_cells + target_size:
+        if (self.position - self.target.position).length() > self.attack_radius_cells + eff_target_size:
             found_path = self.find_path(arena_cell_occupancy)
 
             if not found_path:
@@ -194,7 +199,7 @@ class Troop(Entity):
         
 
         ### Combat Mechanics ###
-        if (self.position - self.target.position).length() < self.attack_radius_cells + target_size: 
+        if (self.position - self.target.position).length() < self.attack_radius_cells + eff_target_size: 
             self.attack_mechanics() 
             self._attack_timer += dt
 
@@ -313,22 +318,43 @@ class Troop(Entity):
         # All free tile indices, computed once and shared by both nearest_free calls.
         free_cells = np.argwhere(tiled_occupancy_grid == 0)  # shape (K, 2)
 
-        def nearest_free(px, py, toward_x=None, toward_y=None):
-            """Snap a tile coordinate to the nearest unblocked cell.
-            Fully vectorized: no Python loops, O(K) numpy arithmetic over ~500 cells."""
-            tx = int(np.clip(px / SCALE, 0, grid_rows - 1))
-            ty = int(np.clip(py / SCALE, 0, grid_cols - 1))
+        from game.entities.building import Building
+
+        def nearest_free_entity(entity, toward_entity=None):
+            """Snap an entity's position to the nearest unblocked cell.
+            Uses bounding-box distance for buildings, and center tile distance for troops."""
+            tx = int(np.clip(entity.position.x / SCALE, 0, grid_rows - 1))
+            ty = int(np.clip(entity.position.y / SCALE, 0, grid_cols - 1))
             if tiled_occupancy_grid[tx, ty] == 0:
                 return (tx, ty)
-            # Chebyshev distance from the blocked cell to every free cell
-            d2 = (free_cells[:, 0] - tx) ** 2 + (free_cells[:, 1] - ty) ** 2
+
+            if isinstance(entity, Building):
+                left = entity.position.x - entity.size.x / 2
+                right = entity.position.x + entity.size.x / 2
+                top = entity.position.y - entity.size.y / 2
+                bottom = entity.position.y + entity.size.y / 2
+
+                r_min = int(np.floor(left / SCALE))
+                r_max = int(np.ceil(right / SCALE)) - 1
+                c_min = int(np.floor(top / SCALE))
+                c_max = int(np.ceil(bottom / SCALE)) - 1
+            else:
+                r_min, r_max, c_min, c_max = tx, tx, ty, ty
+
+            r_min = max(0, min(r_min, grid_rows - 1))
+            r_max = max(0, min(r_max, grid_rows - 1))
+            c_min = max(0, min(c_min, grid_cols - 1))
+            c_max = max(0, min(c_max, grid_cols - 1))
+
+            dr = np.maximum(0, np.maximum(r_min - free_cells[:, 0], free_cells[:, 0] - r_max))
+            dc = np.maximum(0, np.maximum(c_min - free_cells[:, 1], free_cells[:, 1] - c_max))
+            d2 = dr ** 2 + dc ** 2
             min_d2 = d2.min()
-            # Candidates: all free cells at the minimum radius (the perimeter ring)
-            mask = d2 == min_d2
-            candidates = free_cells[mask]  # shape (M, 2)
-            if toward_x is not None and len(candidates) > 1:
-                # Among the ring, pick the cell closest to the approaching point
-                ref_r, ref_c = toward_x / SCALE, toward_y / SCALE
+
+            candidates = free_cells[d2 == min_d2]
+            if toward_entity is not None and len(candidates) > 1:
+                ref_r = toward_entity.position.x / SCALE
+                ref_c = toward_entity.position.y / SCALE
                 d_toward = (candidates[:, 0] - ref_r) ** 2 + (candidates[:, 1] - ref_c) ** 2
                 best = candidates[np.argmin(d_toward)]
             else:
@@ -336,10 +362,21 @@ class Troop(Entity):
             return (int(best[0]), int(best[1]))
 
         # Start nudge toward target, target nudge toward troop
-        start  = nearest_free(self.position.x, self.position.y,
-                              self.target.position.x, self.target.position.y)
-        target = nearest_free(self.target.position.x, self.target.position.y,
-                              self.position.x, self.position.y)
+        start = nearest_free_entity(self, self.target)
+
+        # Cache the target snapped cell to avoid oscillations as the troop moves
+        cached_cell = getattr(self, '_cached_target_cell', None)
+        cached_ent = getattr(self, '_cached_target_entity', None)
+        if (
+            cached_ent is None
+            or cached_ent != self.target
+            or cached_cell is None
+            or tiled_occupancy_grid[cached_cell[0], cached_cell[1]] != 0
+        ):
+            self._cached_target_entity = self.target
+            self._cached_target_cell = nearest_free_entity(self.target, self)
+
+        target = self._cached_target_cell
 
         path = self.a_star(tiled_occupancy_grid, start, target)
 
