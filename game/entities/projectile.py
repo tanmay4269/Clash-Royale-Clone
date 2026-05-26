@@ -41,7 +41,7 @@ class Projectile:
 
         self.projectile_type = projectile_type
         self.damage = damage
-        self.max_range_cells = max_range * 16
+        self.max_range_cells = max_range * 16 + 32  # Add buffer for target size & frame overshoot
         self.target_types = target_types
         if not isinstance(self.target_types, set):
             self.target_types = set({self.target_types})

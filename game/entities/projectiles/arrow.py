@@ -3,6 +3,9 @@ from game.entities.projectile import Projectile
 
 
 class Arrow(Projectile):
+    RADIUS = 0.25
+    SPEED  = 200
+
     def __init__(
         self, 
         owner, 
@@ -16,11 +19,11 @@ class Arrow(Projectile):
     ):
         super().__init__(
             owner, 
-            0.25,  # Radius
+            self.RADIUS,
 
             start_position, 
             direction, 
-            speed=200, 
+            speed=self.SPEED, 
 
             projectile_type=Projectile.TargetType.SINGLE,
             damage=damage,
@@ -29,4 +32,18 @@ class Arrow(Projectile):
         )
     
     def render(self, screen) -> None:
-        pygame.draw.circle(screen, "black", self.position, 4)
+        if self.velocity.length_squared() > 0:
+            direction = self.velocity.normalize()
+        else:
+            direction = Vector2(0, -1)
+
+        length = 12
+        width = 3
+        right = Vector2(-direction.y, direction.x)
+
+        p1 = self.position - direction * (length / 2) - right * (width / 2)
+        p2 = self.position + direction * (length / 2) - right * (width / 2)
+        p3 = self.position + direction * (length / 2) + right * (width / 2)
+        p4 = self.position - direction * (length / 2) + right * (width / 2)
+
+        pygame.draw.polygon(screen, "black", [p1, p2, p3, p4])

@@ -1,6 +1,6 @@
 from game.utils import *
 from game.entities.buildings.crown_tower import CrownTower
-from game.entities.projectiles.arrow import Arrow
+from game.entities.projectiles.cannon_shell import CannonShell
 from game.entities.projectile_shooter import ProjectileShooter
 
 
@@ -49,4 +49,11 @@ class KingTower(CrownTower, ProjectileShooter):
 
 
     def get_projectile(self, direction, target_types):
-        return Arrow(self.owner, self.position.copy(), direction, self.damage, self.attack_radius_cells / 16, target_types)
+        return CannonShell(
+            self.owner, 
+            self.position.copy(), 
+            direction, 
+            self.damage, 
+            self.attack_radius_cells / 16, 
+            target_types
+        )
