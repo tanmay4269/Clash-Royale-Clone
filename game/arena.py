@@ -59,7 +59,7 @@ class Arena:
         for obj in towers:
             self.deploy_entity(obj)
 
-
+        # 
         self.elapsed_time = 0
         self.game_duration = 300  # 5:00 — extended for sudden death
 
@@ -73,7 +73,7 @@ class Arena:
         # Set by update() when the game ends; 1 or 2 for the winning player, None otherwise
         self.winner: int | None = None
         
-
+        # 
         self._font = None
 
         # * DEBUG *
@@ -83,7 +83,7 @@ class Arena:
     
     def render(self, screen, render_cell_occupancy=True) -> None:
         """        
-        * For simplicity, I'll keep each sub-tile cell as one pixel
+        For simplicity, I'll keep each sub-tile cell as one pixel
         """
 
         # Ground layer
@@ -342,8 +342,8 @@ class Arena:
     def _resolve_tiebreaker(self) -> None:
         """
         Called when the 5:00 hard limit is hit.
-        Rule 1 – most living towers wins.
-        Rule 2 – if equal towers, least total remaining HP loses (more damage taken).
+        Rule 1: most living towers wins.
+        Rule 2: if equal towers, least total remaining HP loses (more damage taken).
         Sets self.winner to 1, 2, or leaves it None on a true draw.
         """
         def _living_towers(side):
