@@ -315,9 +315,15 @@ class Troop(Entity):
         ).astype(bool)
 
         # Block: permanent walls (center-pixel) OR buildings (max-pool); troops passable.
-        tiled_occupancy_grid = np.where(
-            (center == 1) | building_any, 1, 0
-        ).astype(int)
+        if self.entity_type == EntityType.AIR:
+            # Air troops fly over river (center == 1)
+            tiled_occupancy_grid = np.where(
+                building_any, 1, 0
+            ).astype(int)
+        else:
+            tiled_occupancy_grid = np.where(
+                (center == 1) | building_any, 1, 0
+            ).astype(int)
 
         grid_rows, grid_cols = tiled_occupancy_grid.shape
 

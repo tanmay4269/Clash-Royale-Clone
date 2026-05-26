@@ -44,6 +44,7 @@ from game.entities.troops.giant      import Giant
 from game.entities.troops.mini_pekka import MiniPEKKA
 from game.entities.troops.musketeer  import Musketeer
 from game.entities.troops.archer     import Archers
+from game.entities.troops.minion     import Minions
 from game.entities.spells.fireball   import Fireball
 from game.entities.spells.arrows     import Arrows
 
@@ -265,7 +266,7 @@ class Game:
         return (
             "\n=== Clash Royale Manual Test ===\n"
             "  1 / 2        -> switch deploy side (player 1 / 2)\n"
-            "  K / G / P / M / A / F / W -> set card  (Knight / Giant / MiniPEKKA / Musketeer / Archers / Fireball / Arrows)\n"
+            "  K / G / P / M / A / F / W / N -> set card  (Knight / Giant / MiniPEKKA / Musketeer / Archers / Fireball / Arrows / Minions)\n"
             "  R / S / C    -> bot mode  (Random / Skip / Scripted)\n"
             "  Left-click   -> deploy card\n"
             "================================\n"
@@ -381,7 +382,7 @@ class Game:
                     print("Active player -> 2")
 
                 # Card selection
-                elif event.key in [pygame.K_k, pygame.K_g, pygame.K_p, pygame.K_m, pygame.K_a, pygame.K_f, pygame.K_w]:
+                elif event.key in [pygame.K_k, pygame.K_g, pygame.K_p, pygame.K_m, pygame.K_a, pygame.K_f, pygame.K_w, pygame.K_n]:
                     key_map = {
                         pygame.K_k: Knight,
                         pygame.K_g: Giant,
@@ -390,6 +391,7 @@ class Game:
                         pygame.K_a: Archers,
                         pygame.K_f: Fireball,
                         pygame.K_w: Arrows,
+                        pygame.K_n: Minions,
                     }
                     card_cls = key_map[event.key]
                     owner = self.arena.player_side_1 if self.arena._debug_active_player == 1 else self.arena.player_side_2

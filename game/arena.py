@@ -236,6 +236,7 @@ class Arena:
             "Archers": {"char": "A", "cost": 3, "color": (40, 200, 80)},
             "Fireball": {"char": "F", "cost": 4, "color": (255, 69, 0)},
             "Arrows": {"char": "W", "cost": 3, "color": (0, 200, 220)},
+            "Minions": {"char": "N", "cost": 3, "color": (138, 43, 226)},
         }
 
         # Fonts

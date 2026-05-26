@@ -4,5 +4,6 @@ from game.entities.troops.giant import Giant
 from game.entities.troops.mini_pekka import MiniPEKKA
 from game.entities.troops.musketeer import Musketeer
 from game.entities.troops.archer import Archers
+from game.entities.troops.minion import Minions
 
-__all__ = ["Knight", "Giant", "MiniPEKKA", "Musketeer", "Archers"]
+__all__ = ["Knight", "Giant", "MiniPEKKA", "Musketeer", "Archers", "Minions"]
