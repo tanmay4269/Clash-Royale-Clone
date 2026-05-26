@@ -2,8 +2,8 @@ import numpy as np
 import torch as t
 import torch.nn as nn
 
-from utils import EntityRegistry
-from entities.troops import Knight, Giant, MiniPEKKA
+from game.entity import EntityRegistry
+from game.entities.troops import Knight, Giant, MiniPEKKA
 
 
 class ActorCritic(nn.Module):
@@ -331,19 +331,6 @@ class ActorCriticV2(nn.Module):
 
     def make_position_head(self, use_cnn_position_decoder, input_ch, position_space_width, position_space_height, layer_init, activation_layer):
         if not use_cnn_position_decoder:
-            # return nn.Sequential(
-            #     layer_init(nn.Linear(input_ch, 384)),
-            #     activation_layer(),
-
-            #     layer_init(nn.Linear(384, 384)),
-            #     activation_layer(),
-
-            #     layer_init(nn.Linear(384, 256)),
-            #     activation_layer(),
-
-            #     layer_init(nn.Linear(256, 32 * 18), std=0.01),
-            # )
-
             return nn.Sequential(
                 layer_init(nn.Linear(input_ch, position_space_width * position_space_height), std=0.01)
             )

@@ -21,17 +21,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from network import ActorCritic, BotNet
+from rl.network import ActorCritic, BotNet
 
 import gymnasium as gym
-import cr_gym_env
-from cr_flatten_norm_wrapper import CRFlattenNormWrapper
-from parallel_env import ParallelEnvManager
+import rl.env.cr_gym_env
+from rl.env.cr_flatten_norm_wrapper import CRFlattenNormWrapper
+from rl.env.parallel_env import ParallelEnvManager
 
-from rollout_buffer import RolloutBuffer
-from checkpoint_management import *
-from utils import AverageMeter, HeatmapVisualizerWrapper
-from diagnostics_logger import DiagnosticsLogger
+from rl.rollout_buffer import RolloutBuffer
+from rl.checkpoint_management import *
+from rl.utils import AverageMeter, HeatmapVisualizerWrapper
+from rl.diagnostics_logger import DiagnosticsLogger
 
 import wandb
 

@@ -1,5 +1,5 @@
-from utils import *
-from entities.building import Building
+from game.utils import *
+from game.entities.building import Building
 
 
 class CrownTower(Building):

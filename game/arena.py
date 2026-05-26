@@ -1,15 +1,15 @@
-from utils import *
+from game.utils import *
 from collections import deque
 
-from player_side import PlayerSide, PlayerSide1, PlayerSide2
-from entity import Entity
+from game.player_side import PlayerSide, PlayerSide1, PlayerSide2
+from game.entity import Entity
 
-from entities.building import Building
-from entities.troop import Troop
+from game.entities.building import Building
+from game.entities.troop import Troop
 
-from entities.troops.knight import Knight
-from entities.troops.giant import Giant
-from entities.troops.mini_pekka import MiniPEKKA
+from game.entities.troops.knight import Knight
+from game.entities.troops.giant import Giant
+from game.entities.troops.mini_pekka import MiniPEKKA
 
 
 class Arena:

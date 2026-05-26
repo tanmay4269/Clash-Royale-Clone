@@ -1,11 +1,11 @@
-from utils import *
-from entities.buildings.crown_tower import CrownTower
-from entities.projectiles.arrow import Arrow
-from entities.projectile_shooter import ProjectileShooter
+from game.utils import *
+from game.entities.buildings.crown_tower import CrownTower
+from game.entities.projectiles.arrow import Arrow
+from game.entities.projectile_shooter import ProjectileShooter
 
 
-@EntityRegistry.register("KingTower")
-class KingTower(CrownTower, ProjectileShooter):
+@EntityRegistry.register("PrincessTower")
+class PrincessTower(CrownTower, ProjectileShooter):
     def __init__(
         self, owner, row: int, col: int, 
         width: int, height: int,
@@ -17,14 +17,12 @@ class KingTower(CrownTower, ProjectileShooter):
         super().__init__(
             owner=owner, row=row, col=col,
             width=width, height=height,
-            hitpoints=4008,
+            hitpoints=2534,
             damage=90,
-            attack_radius=7,
-            hit_speed=1.0, first_hit_speed=0.0,
+            attack_radius=7.5,
+            hit_speed=0.8, first_hit_speed=0.8,
             **kwargs
         )
-
-        self.is_activated = False
 
     
     def render(self, screen) -> None:
@@ -40,14 +38,13 @@ class KingTower(CrownTower, ProjectileShooter):
 
     def update(self, dt, arena_cell_occupancy) -> bool:
         if self.health < 0:
+            self.owner.king_tower.is_activated = True
             return False
-
-        if self.is_activated:
-            self.update_projectiles(dt)
+        
+        self.update_projectiles(dt)
 
         return True
 
 
     def get_projectile(self, direction, target_types):
         return Arrow(self.owner, self.position.copy(), direction, self.damage, self.attack_radius_cells / 16, target_types)
-

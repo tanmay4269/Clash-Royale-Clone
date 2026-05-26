@@ -1,5 +1,5 @@
-from utils import *
-from entities.troop import Troop
+from game.utils import *
+from game.entities.troop import Troop
 
 
 @EntityRegistry.register("Giant")

@@ -1,5 +1,5 @@
-from utils import *
-from entities.projectile import Projectile
+from game.utils import *
+from game.entities.projectile import Projectile
 
 
 class Arrow(Projectile):

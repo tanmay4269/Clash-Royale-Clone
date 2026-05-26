@@ -1,5 +1,6 @@
-from entities.buildings.king_tower import KingTower
-from entities.buildings.princess_tower import PrincessTower
+from game.entities.buildings.king_tower import KingTower
+from game.entities.buildings.princess_tower import PrincessTower
+from typing import List
 
 
 class PlayerSide:

@@ -1,5 +1,5 @@
-from utils import *
-from entity import Entity
+from game.utils import *
+from game.entity import Entity
 
 
 class ProjectileShooter(Entity):

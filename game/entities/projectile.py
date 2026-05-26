@@ -1,4 +1,4 @@
-from utils import *
+from game.utils import *
 
 
 class Projectile:
@@ -64,8 +64,6 @@ class Projectile:
         for obj in self.owner.opponent.objects:
             if obj.entity_type not in self.target_types:
                 continue
-
-            # print(obj.entity_type == EntityType.BUILDING)
 
             delta = obj.position - self.position
             if obj.entity_type == EntityType.BUILDING:

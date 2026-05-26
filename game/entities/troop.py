@@ -1,6 +1,6 @@
-from utils import *
-from entity import Entity
-from entities.buildings.crown_tower import CrownTower
+from game.utils import *
+from game.entity import Entity
+from game.entities.buildings.crown_tower import CrownTower
 
 import heapq
 from collections import deque
@@ -218,8 +218,8 @@ class Troop(Entity):
           - Non-tower targets (troops / buildings) within visibility range always
             take priority over the default tower.
         """
-        from entities.buildings.king_tower import KingTower as KingTowerClass
-        from entities.buildings.princess_tower import PrincessTower as PrincessTowerClass
+        from game.entities.buildings.king_tower import KingTower as KingTowerClass
+        from game.entities.buildings.princess_tower import PrincessTower as PrincessTowerClass
 
         # Doesn't need to know who the target is, just knowing the location is fine
         if target:
@@ -439,4 +439,3 @@ class Troop(Entity):
         self._is_first_hit = False
         self._attack_timer = 0  # Reset
         self.target.apply_damage(self.damage)
-

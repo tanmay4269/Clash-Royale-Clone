@@ -31,17 +31,17 @@ import numpy as np
 import torch as t
 import torch.nn.functional as F
 
-from utils import *
-from arena import Arena
-from network import BotNet, ActorCritic
+from game.utils import *
+from game.arena import Arena
+from rl.network import BotNet, ActorCritic
 
 import gymnasium as gym
-import cr_gym_env
-from cr_flatten_norm_wrapper import CRFlattenNormWrapper
+import rl.env.cr_gym_env
+from rl.env.cr_flatten_norm_wrapper import CRFlattenNormWrapper
 
-from entities.troops.knight    import Knight
-from entities.troops.giant     import Giant
-from entities.troops.mini_pekka import MiniPEKKA
+from game.entities.troops.knight     import Knight
+from game.entities.troops.giant      import Giant
+from game.entities.troops.mini_pekka import MiniPEKKA
 
 
 def split_observations(obs, env, arena, max_num_objects):

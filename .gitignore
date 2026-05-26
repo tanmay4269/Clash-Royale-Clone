@@ -1,9 +1,15 @@
 **/__pycache__
+*.egg-info
+
 .tmp
 tmp/
+
+checkpoints/
+
 videos/
 saved-videos/
-wandb/
-checkpoints/
+
 runs/
 saved-runs/
+
+wandb/

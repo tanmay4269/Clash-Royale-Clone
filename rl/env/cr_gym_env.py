@@ -1,5 +1,5 @@
-from utils import *
-from cr_flatten_norm_wrapper import CRFlattenNormWrapper
+from game.utils import *
+from rl.env.cr_flatten_norm_wrapper import CRFlattenNormWrapper
 
 import os
 import time
@@ -10,16 +10,16 @@ import gymnasium as gym
 from gymnasium import spaces
 from gymnasium.envs.registration import register
 
-from arena import Arena
-from entity import EntityType, Entity
-from entities.buildings.crown_tower import CrownTower
+from game.arena import Arena
+from game.entity import EntityType, Entity
+from game.entities.buildings.crown_tower import CrownTower
 
-from entities.troops import *
+from game.entities.troops import *
 
 
 register(
     id="ClashRoyaleEnv-v0",
-    entry_point="cr_gym_env:ClashRoyaleEnv",
+    entry_point="rl.env.cr_gym_env:ClashRoyaleEnv",
 )
 
 class ClashRoyaleEnv(gym.Env):
@@ -510,12 +510,8 @@ if __name__ == "__main__":
             # player_2_spawn_cooldown += 1/100
 
             print("-----")
-            # print(next_state["game_completion_fraction"])
             print("action", action)
             print("next_state", next_state)
-            # print("reward", reward)
-            # print("termination", termination)
-            # print("truncated", truncated)
 
             done = termination or truncated
     except Exception as e:

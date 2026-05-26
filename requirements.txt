@@ -1,0 +1,8 @@
+numpy
+gymnasium[other]
+pygame
+addict
+rich
+tqdm
+wandb
+plotly

@@ -3,6 +3,26 @@
 A custom tick-based game engine simulating Clash Royale, written in Python. Pygame is used to render game states at each tick. 
 The primary goal is not an identical replica, but rather a performant reinforcement learning (RL) playground for agent training and experimentation.
 
+## Installation
+
+1. Install the project dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. Install the right version of PyTorch from [here](https://pytorch.org)
+
+3. Install the repository in editable mode:
+   ```bash
+   pip install -e .
+   ```
+   This exposes the `game` and `rl` folders as top-level importable packages. All absolute imports (e.g. `import game` and `import rl`) will resolve properly without `sys.path` workarounds, ensuring IDEs and linters recognize them correctly.
+
+## Project Structure
+
+- `game/`: The core tick-based game engine (environment dynamics, physics, logic, units, rendering/UI) with zero dependencies on the RL stack.
+- `rl/`: The reinforcement learning training loop, PPO trainer, neural networks, and gymnasium environment wrapper.
+
 ## Running the Environment & Training
 
 The repository includes a custom PPO trainer designed to interface with the parallelized Gymnasium environment.
@@ -30,19 +50,7 @@ If you are modifying the engine physics or observation wrappers and want to test
 python profiling.py
 ```
 
-This script will run a heavy workload on both a single environment and an 8x parallel environment manager, reporting the exact FPS. To dive deeper and print micro-benchmarks for engine components (like `arena.update`), use the environment variable guard:
-
-```bash
-PROFILE_ENV=1 python profiling.py
-```
-
-### 3. Debug Mode
-
-For quick iterations, run the trainer in debug mode. This drastically reduces buffer sizes, minibatch sizes, disables wandb logging, and enables verbose output:
-
-```bash
-python ppo_trainer.py --debug
-```
+This script will run a heavy workload on both a single environment and an 8x parallel environment manager, reporting the exact FPS. 
 
 ---
 # Latest Progress
