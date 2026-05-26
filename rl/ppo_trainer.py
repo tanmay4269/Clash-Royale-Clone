@@ -30,7 +30,8 @@ from rl.env.parallel_env import ParallelEnvManager
 
 from rl.rollout_buffer import RolloutBuffer
 from rl.checkpoint_management import *
-from rl.utils import AverageMeter, HeatmapVisualizerWrapper
+from rl.utils import AverageMeter
+from rl.heatmap_visualizer import HeatmapVisualizerWrapper
 from rl.diagnostics_logger import DiagnosticsLogger
 
 import wandb
@@ -865,8 +866,8 @@ class Trainer:
                 state_1, state_2 = self.split_observations(state)
 
                 with t.no_grad():
-                    _, skip_logits_1, deck_logits_1, pos_logits_1 = net_1(self._normalize_obs(state_1))
-                    _, skip_logits_2, deck_logits_2, pos_logits_2 = net_2(self._normalize_obs(state_2))
+                    val_1, skip_logits_1, deck_logits_1, pos_logits_1 = net_1(self._normalize_obs(state_1))
+                    val_2, skip_logits_2, deck_logits_2, pos_logits_2 = net_2(self._normalize_obs(state_2))
 
                     if net_1.invalid_position_mask is not None:
                         pos_logits_1 = pos_logits_1.masked_fill(net_1.invalid_position_mask, float('-inf'))
@@ -875,8 +876,11 @@ class Trainer:
 
                     skip_probs_1 = t.sigmoid(skip_logits_1).squeeze(0).cpu().numpy()
                     deck_probs_1 = F.softmax(deck_logits_1, dim=-1).squeeze(0).cpu().numpy()
-                    pos_logits_np_1 = pos_logits_1.squeeze(0).cpu().numpy()
                     pos_probs_1  = F.softmax(pos_logits_1, dim=-1).squeeze(0).cpu().numpy()
+
+                    skip_probs_2 = t.sigmoid(skip_logits_2).squeeze(0).cpu().numpy()
+                    deck_probs_2 = F.softmax(deck_logits_2, dim=-1).squeeze(0).cpu().numpy()
+                    pos_probs_2  = F.softmax(pos_logits_2, dim=-1).squeeze(0).cpu().numpy()
 
                     skip_dist_1 = t.distributions.Bernoulli(logits=skip_logits_1)
                     deck_dist_1 = t.distributions.Categorical(logits=deck_logits_1)
@@ -899,13 +903,16 @@ class Trainer:
             
                 action = self.join_actions(action_1, action_2)
                 rec_env.env.update(
-                    player_idx=1,
-                    skip_prob=skip_probs_1.item(),
-                    deck_probs=deck_probs_1,
-                    pos_probs=pos_probs_1,
-                    pos_logits=pos_logits_np_1,
-                    action=action_1,
-                    env_action=action,
+                    value_1=val_1.squeeze(0).cpu().item(),
+                    value_2=val_2.squeeze(0).cpu().item(),
+                    skip_prob_1=skip_probs_1.item(),
+                    skip_prob_2=skip_probs_2.item(),
+                    deck_probs_1=deck_probs_1,
+                    deck_probs_2=deck_probs_2,
+                    pos_probs_1=pos_probs_1,
+                    pos_probs_2=pos_probs_2,
+                    action_1=action_1,
+                    action_2=action_2,
                 )
 
 
