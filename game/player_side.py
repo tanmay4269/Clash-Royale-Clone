@@ -34,9 +34,10 @@ class PlayerSide:
         from game.entities.troops.musketeer  import Musketeer
         from game.entities.troops.archer     import Archers
         from game.entities.spells.fireball   import Fireball
+        from game.entities.spells.arrows     import Arrows
         import random
 
-        self.deck = [Knight, Giant, MiniPEKKA, Musketeer, Archers, Fireball]
+        self.deck = [Knight, Giant, MiniPEKKA, Musketeer, Archers, Fireball, Arrows]
         shuffled = list(self.deck)
         random.shuffle(shuffled)
         self.hand = shuffled[:4]

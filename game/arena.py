@@ -235,6 +235,7 @@ class Arena:
             "Musketeer": {"char": "M", "cost": 4, "color": (160, 80, 220)},
             "Archers": {"char": "A", "cost": 3, "color": (40, 200, 80)},
             "Fireball": {"char": "F", "cost": 4, "color": (255, 69, 0)},
+            "Arrows": {"char": "W", "cost": 3, "color": (0, 200, 220)},
         }
 
         # Fonts
