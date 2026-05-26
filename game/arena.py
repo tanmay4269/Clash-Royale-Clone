@@ -81,13 +81,30 @@ class Arena:
         self._debug_active_card = Knight
 
     
-    def render(self, screen, render_cell_occupancy=True) -> None:
+    def render(self, screen, render_cell_occupancy=True, scale_factor=1.0) -> None:
         """        
         For simplicity, I'll keep each sub-tile cell as one pixel
         """
+        # Set up scaled fonts dictionary if not present
+        if not hasattr(self, '_scaled_fonts'):
+            self._scaled_fonts = {}
+
+        # Get scaled font helper
+        def get_font(name, size, bold=False):
+            key = (name, size, bold)
+            if key not in self._scaled_fonts:
+                self._scaled_fonts[key] = pygame.font.SysFont(name, size, bold=bold)
+            return self._scaled_fonts[key]
+
+        if scale_factor != 1.0:
+            arena_w = self.width * self.tile_size
+            arena_h = self.height * self.tile_size
+            arena_surface = pygame.Surface((arena_w, arena_h))
+        else:
+            arena_surface = screen
 
         # Ground layer
-        screen.fill("#D1CC95")
+        arena_surface.fill("#D1CC95")
 
         # Occupancy map
         if render_cell_occupancy:
@@ -101,32 +118,36 @@ class Arena:
 
             surface = pygame.surfarray.make_surface(rgb_occupancy_map)
             surface.set_alpha(127)
-            screen.blit(surface, (0, 0))
+            arena_surface.blit(surface, (0, 0))
 
 
         # Faint gridlines 
         #   TODO: This can probably be optimised by precomputing a sprite 
         for r in range(self.height):
             for c in range(self.width):
-                pygame.draw.line(screen, (128, 128, 128), (0, self.tile_size * r), (self.tile_size * self.width, self.tile_size * r), 1)
-                pygame.draw.line(screen, (128, 128, 128), (self.tile_size * c, 0), (self.tile_size * c, self.tile_size * self.height), 1)
+                pygame.draw.line(arena_surface, (128, 128, 128), (0, self.tile_size * r), (self.tile_size * self.width, self.tile_size * r), 1)
+                pygame.draw.line(arena_surface, (128, 128, 128), (self.tile_size * c, 0), (self.tile_size * c, self.tile_size * self.height), 1)
 
 
         # All objects
         for obj in self.objects:
-            obj.render(screen)
+            obj.render(arena_surface)
 
         for obj in self.deploy_buffer:
-            obj.render(screen)
+            obj.render(arena_surface)
 
         # Highlighted cell under the cursor
         if pygame.display.get_init():
             display_surf = pygame.display.get_surface()
             if display_surf is not None:
                 (m_x, m_y) = pygame.mouse.get_pos()
-                scale = display_surf.get_width() / screen.get_width()
-                mouse_x = int(m_x / scale)
-                mouse_y = int(m_y / scale)
+                if scale_factor != 1.0:
+                    mouse_x = int(m_x / scale_factor)
+                    mouse_y = int(m_y / scale_factor)
+                else:
+                    scale = display_surf.get_width() / screen.get_width()
+                    mouse_x = int(m_x / scale)
+                    mouse_y = int(m_y / scale)
                 tile_x = mouse_x // self.tile_size
                 tile_y = mouse_y // self.tile_size
 
@@ -134,22 +155,30 @@ class Arena:
                     surface = pygame.Surface((self.tile_size, self.tile_size))
                     surface.set_alpha(127)
                     surface.fill((128, 128, 128))
-                    screen.blit(surface, (tile_x * self.tile_size, tile_y * self.tile_size))
+                    arena_surface.blit(surface, (tile_x * self.tile_size, tile_y * self.tile_size))
+
+        if scale_factor != 1.0:
+            # Scale arena_surface and blit to the final screen
+            target_w = int(self.width * self.tile_size * scale_factor)
+            target_h = int(self.height * self.tile_size * scale_factor)
+            scaled_arena = pygame.transform.smoothscale(arena_surface, (target_w, target_h))
+            screen.blit(scaled_arena, (0, 0))
 
         # HUD: mode indicator (top left) | E: X  MM:SS (top right) | E: X (bottom left)
         if self._font is None:
-            self._font = pygame.font.SysFont(None, 14)
+            self._font = get_font(None, 14)
+        font_hud = get_font(None, int(14 * scale_factor))
 
-        screen_w = self.width * self.tile_size
-        screen_h = self.height * self.tile_size
+        screen_w = int(self.width * self.tile_size * scale_factor)
+        screen_h = int(self.height * self.tile_size * scale_factor)
 
         # Count-up timer in MM:SS — top right
         elapsed = int(self.elapsed_time)
         mins = elapsed // 60
         secs = elapsed % 60
-        timer_text = self._font.render(f"{mins}:{secs:02d}", True, (220, 220, 220))
-        timer_x = screen_w - timer_text.get_width() - 4
-        screen.blit(timer_text, (timer_x, 4))
+        timer_text = font_hud.render(f"{mins}:{secs:02d}", True, (220, 220, 220))
+        timer_x = screen_w - timer_text.get_width() - int(4 * scale_factor)
+        screen.blit(timer_text, (timer_x, int(4 * scale_factor)))
 
         # Elixir / Sudden Death mode indicator — top right, just to the left of the timer
         if self.has_sudden_death_started:
@@ -165,26 +194,38 @@ class Arena:
             mode_label = None
 
         if mode_label is not None:
-            mode_text = self._font.render(mode_label, True, mode_color)
-            screen.blit(mode_text, (timer_x - mode_text.get_width() - 6, 4))
+            mode_text = font_hud.render(mode_label, True, mode_color)
+            screen.blit(mode_text, (timer_x - mode_text.get_width() - int(6 * scale_factor), int(4 * scale_factor)))
 
         # Player 1 elixir — top left
-        elixir_text_1 = self._font.render(f"E: {self.player_side_1.elixirs:.0f}", True, (220, 220, 220))
-        screen.blit(elixir_text_1, (4, 4))
+        elixir_text_1 = font_hud.render(f"E: {self.player_side_1.elixirs:.0f}", True, (220, 220, 220))
+        screen.blit(elixir_text_1, (int(4 * scale_factor), int(4 * scale_factor)))
 
         # Player 2 elixir — bottom left
-        elixir_text_2 = self._font.render(f"E: {self.player_side_2.elixirs:.0f}", True, (220, 220, 220))
-        screen.blit(elixir_text_2, (4, screen_h - elixir_text_2.get_height() - 4))
+        elixir_text_2 = font_hud.render(f"E: {self.player_side_2.elixirs:.0f}", True, (220, 220, 220))
+        screen.blit(elixir_text_2, (int(4 * scale_factor), screen_h - elixir_text_2.get_height() - int(4 * scale_factor)))
 
         # Draw the right side deck/hand HUD panel
-        self.draw_hud_panel(screen)
+        self.draw_hud_panel(screen, scale_factor, get_font)
 
 
-    def draw_hud_panel(self, screen) -> None:
+    def draw_hud_panel(self, screen, scale_factor=1.0, get_font=None) -> None:
+        if get_font is None:
+            if not hasattr(self, '_scaled_fonts'):
+                self._scaled_fonts = {}
+            def get_font(name, size, bold=False):
+                key = (name, size, bold)
+                if key not in self._scaled_fonts:
+                    self._scaled_fonts[key] = pygame.font.SysFont(name, size, bold=bold)
+                return self._scaled_fonts[key]
+
         # Draw panel background
-        panel_rect = pygame.Rect(self.width * self.tile_size, 0, 200, self.height * self.tile_size)
+        panel_x = int(self.width * self.tile_size * scale_factor)
+        panel_w = int(200 * scale_factor)
+        panel_h = int(self.height * self.tile_size * scale_factor)
+        panel_rect = pygame.Rect(panel_x, 0, panel_w, panel_h)
         pygame.draw.rect(screen, (24, 24, 28), panel_rect)
-        pygame.draw.line(screen, (80, 80, 80), (self.width * self.tile_size, 0), (self.width * self.tile_size, self.height * self.tile_size), 2)
+        pygame.draw.line(screen, (80, 80, 80), (panel_x, 0), (panel_x, panel_h), max(1, int(2 * scale_factor)))
 
         # Card metadata
         CARD_INFO = {
@@ -197,47 +238,60 @@ class Arena:
         }
 
         # Fonts
-        title_font = pygame.font.SysFont(None, 16, bold=True)
-        small_font = pygame.font.SysFont(None, 12)
-        badge_font = pygame.font.SysFont(None, 10, bold=True)
+        title_font = get_font(None, int(16 * scale_factor), bold=True)
+        small_font = get_font(None, int(12 * scale_factor))
+        badge_font = get_font(None, int(10 * scale_factor), bold=True)
         
         # Draw Player 1 HUD (Human, top half)
-        self._draw_player_hud_block(screen, self.player_side_1, 1, 20, CARD_INFO, title_font, small_font, badge_font)
+        self._draw_player_hud_block(screen, self.player_side_1, 1, int(20 * scale_factor), CARD_INFO, title_font, small_font, badge_font, scale_factor)
 
         # Draw Player 2 HUD (Opponent, bottom half)
-        self._draw_player_hud_block(screen, self.player_side_2, 2, 320, CARD_INFO, title_font, small_font, badge_font)
+        self._draw_player_hud_block(screen, self.player_side_2, 2, int(320 * scale_factor), CARD_INFO, title_font, small_font, badge_font, scale_factor)
 
 
-    def _draw_player_hud_block(self, screen, player, player_idx, y_offset, card_info, title_font, small_font, badge_font):
+    def _draw_player_hud_block(self, screen, player, player_idx, y_offset, card_info, title_font, small_font, badge_font, scale_factor=1.0):
+        panel_x = int(self.width * self.tile_size * scale_factor)
+
         # 1. Header Text
         title_text = f"PLAYER {player_idx}"
         is_active = (self._debug_active_player == player_idx)
         title_color = (255, 215, 0) if is_active else (180, 180, 180)
         title_surface = title_font.render(title_text, True, title_color)
-        screen.blit(title_surface, (295, y_offset))
+        
+        # Left margin relative to panel_x
+        margin_x = int(7 * scale_factor)
+        title_x = panel_x + margin_x
+        screen.blit(title_surface, (title_x, y_offset))
 
         # Active indicator bullet
         if is_active:
-            pygame.draw.circle(screen, (0, 255, 100), (370, y_offset + 6), 4)
+            indicator_x = panel_x + int(82 * scale_factor)
+            pygame.draw.circle(screen, (0, 255, 100), (indicator_x, y_offset + int(6 * scale_factor)), int(4 * scale_factor))
 
         # 2. Elixir Text & Progress Bar
         elixir_val = player.elixirs
         elixir_text = f"Elixir: {elixir_val:.1f}"
         elixir_surface = small_font.render(elixir_text, True, (200, 200, 200))
-        screen.blit(elixir_surface, (295, y_offset + 18))
+        screen.blit(elixir_surface, (title_x, y_offset + int(18 * scale_factor)))
 
         # Elixir Bar background
-        bar_x, bar_y, bar_w, bar_h = 295, y_offset + 32, 180, 8
-        pygame.draw.rect(screen, (40, 20, 50), (bar_x, bar_y, bar_w, bar_h), border_radius=3)
+        bar_x = title_x
+        bar_y = y_offset + int(32 * scale_factor)
+        bar_w = int(180 * scale_factor)
+        bar_h = int(8 * scale_factor)
+        pygame.draw.rect(screen, (40, 20, 50), (bar_x, bar_y, bar_w, bar_h), border_radius=int(3 * scale_factor))
 
         # Elixir Bar fill
         fill_w = int(bar_w * (elixir_val / player.max_elixirs))
         if fill_w > 0:
-            pygame.draw.rect(screen, (220, 50, 220), (bar_x, bar_y, fill_w, bar_h), border_radius=3)
-        pygame.draw.rect(screen, (100, 100, 100), (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=3)
+            pygame.draw.rect(screen, (220, 50, 220), (bar_x, bar_y, fill_w, bar_h), border_radius=int(3 * scale_factor))
+        pygame.draw.rect(screen, (100, 100, 100), (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=int(3 * scale_factor))
 
         # 3. 4 Hand Cards
-        card_y = y_offset + 48
+        card_y = y_offset + int(48 * scale_factor)
+        card_w = int(30 * scale_factor)
+        card_h = int(42 * scale_factor)
+
         for i, card_cls in enumerate(player.hand):
             card_name = card_cls.__name__
             info = card_info.get(card_name, {"char": "?", "cost": 0, "color": (128, 128, 128)})
@@ -245,8 +299,7 @@ class Arena:
             cost = info["cost"]
             color = info["color"]
 
-            card_x = 295 + i * 36
-            card_w, card_h = 30, 42
+            card_x = title_x + i * int(36 * scale_factor)
             card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
 
             # Check if active selection
@@ -254,7 +307,7 @@ class Arena:
 
             # Draw card slot background
             bg_color = (40, 40, 45) if elixir_val < cost else (55, 55, 65)
-            pygame.draw.rect(screen, bg_color, card_rect, border_radius=4)
+            pygame.draw.rect(screen, bg_color, card_rect, border_radius=int(4 * scale_factor))
 
             # Elixir fill animation
             if elixir_val < cost:
@@ -263,7 +316,7 @@ class Arena:
                 if fill_height > 0:
                     # Draw purple fill from bottom
                     fill_rect = pygame.Rect(card_x, card_y + card_h - fill_height, card_w, fill_height)
-                    pygame.draw.rect(screen, (120, 40, 150), fill_rect, border_radius=4)
+                    pygame.draw.rect(screen, (120, 40, 150), fill_rect, border_radius=int(4 * scale_factor))
             else:
                 # Fully charged card background highlight
                 # Draw a subtle tint of the card's theme color
@@ -273,9 +326,9 @@ class Arena:
 
             # Selected Border (Glowing)
             if is_selected:
-                pygame.draw.rect(screen, (0, 255, 255), (card_x - 1, card_y - 1, card_w + 2, card_h + 2), width=2, border_radius=4)
+                pygame.draw.rect(screen, (0, 255, 255), (card_x - 1, card_y - 1, card_w + 2, card_h + 2), width=max(1, int(2 * scale_factor)), border_radius=int(4 * scale_factor))
             else:
-                pygame.draw.rect(screen, (100, 100, 100), card_rect, width=1, border_radius=4)
+                pygame.draw.rect(screen, (100, 100, 100), card_rect, width=1, border_radius=int(4 * scale_factor))
 
             # Card Letter
             letter_surface = title_font.render(char, True, color)
@@ -284,26 +337,30 @@ class Arena:
             screen.blit(letter_surface, (letter_x, letter_y))
 
             # Cost Badge in top-right
-            badge_rect = pygame.Rect(card_x + card_w - 9, card_y - 3, 12, 12)
-            pygame.draw.circle(screen, (120, 20, 180), badge_rect.center, 6)
+            badge_radius = int(6 * scale_factor)
+            badge_center_x = card_x + card_w - int(3 * scale_factor)
+            badge_center_y = card_y + int(3 * scale_factor)
+            pygame.draw.circle(screen, (120, 20, 180), (badge_center_x, badge_center_y), badge_radius)
+            
             cost_surface = badge_font.render(str(cost), True, (255, 255, 255))
-            cost_x = badge_rect.center[0] - cost_surface.get_width() // 2
-            cost_y = badge_rect.center[1] - cost_surface.get_height() // 2
+            cost_x = badge_center_x - cost_surface.get_width() // 2
+            cost_y = badge_center_y - cost_surface.get_height() // 2
             screen.blit(cost_surface, (cost_x, cost_y))
 
         # 4. Next Card Slot
-        next_x = 295 + 4 * 36 + 6
-        next_y = card_y + 6
-        next_w, next_h = 22, 30
+        next_x = title_x + 4 * int(36 * scale_factor) + int(6 * scale_factor)
+        next_y = card_y + int(6 * scale_factor)
+        next_w = int(22 * scale_factor)
+        next_h = int(30 * scale_factor)
         next_rect = pygame.Rect(next_x, next_y, next_w, next_h)
 
         # Label "NEXT"
         next_label = small_font.render("NEXT", True, (150, 150, 150))
-        screen.blit(next_label, (next_x - 2, next_y - 12))
+        screen.blit(next_label, (next_x - int(2 * scale_factor), next_y - int(12 * scale_factor)))
 
         # Draw Next Card slot background
-        pygame.draw.rect(screen, (30, 30, 35), next_rect, border_radius=3)
-        pygame.draw.rect(screen, (70, 70, 70), next_rect, width=1, border_radius=3)
+        pygame.draw.rect(screen, (30, 30, 35), next_rect, border_radius=int(3 * scale_factor))
+        pygame.draw.rect(screen, (70, 70, 70), next_rect, width=1, border_radius=int(3 * scale_factor))
 
         if player.next_card:
             next_name = player.next_card.__name__

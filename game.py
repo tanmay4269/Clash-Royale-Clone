@@ -177,7 +177,6 @@ class Game:
         self.window_height = int(self.virtual_height * self.scale_factor)
 
         self.screen  = pygame.display.set_mode((self.window_width, self.window_height))
-        self.virtual_screen = pygame.Surface((self.virtual_width, self.virtual_height))
         pygame.display.set_caption(f"Clash Royale: vs {opponent_mode} bot")
         self.clock   = pygame.time.Clock()
         self.running = True
@@ -398,7 +397,8 @@ class Game:
                     else:
                         print(f"Card {card_cls.__name__} not in Player {self.arena._debug_active_player}'s hand!")
 
-        self.arena.render(self.virtual_screen)
+        self.screen.fill((24, 24, 28))
+        self.arena.render(self.screen, scale_factor=self.scale_factor)
         obs_wrapped = self._get_obs_wrapped()
         action_2    = self._player_2_bot_action(obs_wrapped)
 
@@ -428,9 +428,6 @@ class Game:
             self.running = False
             return
 
-        # Scale and draw virtual screen to physical window screen
-        scaled_surface = pygame.transform.scale(self.virtual_screen, (self.window_width, self.window_height))
-        self.screen.blit(scaled_surface, (0, 0))
         pygame.display.flip()
         self.dt = self.clock.tick(60) / 1000
 
