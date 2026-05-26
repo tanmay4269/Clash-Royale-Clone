@@ -31,6 +31,8 @@ class ProjectileShooter(Entity):
         self._attack_timer = 0  # Reset
 
         for obj in self.owner.opponent.objects:
+            if not obj.has_deployed():
+                continue
             delta = obj.position - self.position
             
             target_size = 0

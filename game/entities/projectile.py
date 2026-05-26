@@ -62,6 +62,8 @@ class Projectile:
         ### Collision detection ###
         did_collide = False
         for obj in self.owner.opponent.objects:
+            if not obj.has_deployed():
+                continue
             if obj.entity_type not in self.target_types:
                 continue
 

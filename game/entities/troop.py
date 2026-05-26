@@ -244,10 +244,11 @@ class Troop(Entity):
             opponent.princess_tower_1 if on_left_half else opponent.princess_tower_2
         )
 
-        # Check if that princess tower is still alive (present in opponent.objects)
+        # Check if that princess tower is still alive (present in opponent.objects) and deployed
         if (
             same_half_princess is not None
             and same_half_princess in opponent.objects
+            and same_half_princess.has_deployed()
             and same_half_princess.entity_type in self.target_types
         ):
             default_tower = same_half_princess
@@ -255,12 +256,15 @@ class Troop(Entity):
             # Same-half princess tower is gone → head straight for the king tower
             default_tower = opponent.king_tower if (
                 opponent.king_tower is not None
+                and opponent.king_tower.has_deployed()
                 and opponent.king_tower.entity_type in self.target_types
             ) else None
 
         # --- Scan for a closer non-tower target (troops / buildings) in range ---
         closest_obj, closest_dist = None, float('inf')
         for obj in opponent.objects:
+            if not obj.has_deployed():
+                continue
             if obj.entity_type not in self.target_types:
                 continue
 
