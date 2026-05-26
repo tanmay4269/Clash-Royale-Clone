@@ -131,9 +131,6 @@ def join_actions(action_1, action_2, arena):
     }
 
 
-CARD_MAP = {0: Knight, 1: Giant, 2: MiniPEKKA}
-
-
 def apply_action_to_arena(arena, joined_action):
     """Deploy cards for both players based on a joined action dict."""
     for idx in [1, 2]:
@@ -142,11 +139,15 @@ def apply_action_to_arena(arena, joined_action):
 
         owner = arena.player_side_1 if idx == 1 else arena.player_side_2
         x, y  = joined_action[f"player_{idx}_card_position"]
-        card_cls = CARD_MAP.get(joined_action[f"player_{idx}_card_idx"], Knight)
-        card = card_cls(owner, y, x)
+        card_idx = joined_action[f"player_{idx}_card_idx"]
+        
+        if 0 <= card_idx < len(owner.hand):
+            card_cls = owner.hand[card_idx]
+            card = card_cls(owner, y, x)
 
-        if arena.deploy_entity(card):
-            owner.add_object(card)
+            if arena.deploy_entity(card):
+                owner.add_object(card)
+                owner.use_card(card_idx)
 
 
 class Game:
@@ -192,6 +193,7 @@ class Game:
         self.arena.player_side_2.active_card_idx = 0
 
         print(self._help_text())
+
     def _make_bot(self, mode: str) -> BotNet:
         arena = self.arena
         scale            = arena.tile_size
@@ -233,7 +235,7 @@ class Game:
         return BotNet(
             bot_type              = mode,
             invalid_position_mask = mask_tensor,
-            num_cards_in_deck     = self._env_raw.unwrapped.NUM_CARDS_IN_DECK,
+            num_cards_in_deck     = 4,  # Bot chooses from the 4 cards in hand
             position_space_width  = arena.width,
             position_space_height = arena.height,
         )
