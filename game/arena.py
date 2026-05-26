@@ -405,7 +405,11 @@ class Arena:
             return False
 
         # 3. Add to deploy buffer
-        self.deploy_buffer.append(deploy_me)
+        if hasattr(deploy_me, "get_units"):
+            for unit in deploy_me.get_units():
+                self.deploy_buffer.append(unit)
+        else:
+            self.deploy_buffer.append(deploy_me)
 
         # 4. Subtract player's elixirs and return True
         deploy_me.owner.spend_elixirs(deploy_me.deploy_cost)

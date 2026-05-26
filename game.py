@@ -43,6 +43,7 @@ from game.entities.troops.knight     import Knight
 from game.entities.troops.giant      import Giant
 from game.entities.troops.mini_pekka import MiniPEKKA
 from game.entities.troops.musketeer  import Musketeer
+from game.entities.troops.archer     import Archers
 
 
 def split_observations(obs, env, arena, max_num_objects):
@@ -251,7 +252,7 @@ class Game:
         return (
             "\n=== Clash Royale Manual Test ===\n"
             "  1 / 2        -> switch deploy side (player 1 / 2)\n"
-            "  K / G / P / M -> set card  (Knight / Giant / MiniPEKKA / Musketeer)\n"
+            "  K / G / P / M / A -> set card  (Knight / Giant / MiniPEKKA / Musketeer / Archers)\n"
             "  R / S / C    -> bot mode  (Random / Skip / Scripted)\n"
             "  Left-click   -> deploy card\n"
             "================================\n"
@@ -358,6 +359,9 @@ class Game:
                 elif event.key == pygame.K_m:
                     self.arena._debug_active_card = Musketeer
                     print("Active card -> Musketeer")
+                elif event.key == pygame.K_a:
+                    self.arena._debug_active_card = Archers
+                    print("Active card -> Archers")
 
         self.arena.render(self.screen)
 
@@ -391,8 +395,7 @@ class Game:
             return
 
         pygame.display.flip()
-        self.dt = self.clock.tick(60) * 2 / 1000
-        # self.dt = 1/30
+        self.dt = self.clock.tick(60) / 1000
 
         ### * DEBUG * ###
         if False:

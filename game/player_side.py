@@ -48,8 +48,13 @@ class PlayerSide:
 
 
     def add_object(self, obj):
-        if obj not in self.objects:
-            self.objects.append(obj)
+        if hasattr(obj, "get_units"):
+            for unit in obj.get_units():
+                if unit not in self.objects:
+                    self.objects.append(unit)
+        else:
+            if obj not in self.objects:
+                self.objects.append(obj)
 
 
     def remove_object(self, obj):

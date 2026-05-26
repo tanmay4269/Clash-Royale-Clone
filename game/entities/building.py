@@ -64,8 +64,8 @@ class Building(Entity):
 
         ### * DEBUG * ###
 
-        # if False:
-        if True:
+        # if True:
+        if False:
             # Attack radius
             pygame.draw.circle(screen, "black", self.position, self.attack_radius_cells, width=1)
 
