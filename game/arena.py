@@ -640,7 +640,7 @@ class Arena:
             return
 
         card_cls = owner.hand[owner.active_card_idx]
-        troop = card_cls(owner, tile_row + 1, tile_col + 1)
+        troop = card_cls(owner, tile_row, tile_col)
 
         if self.deploy_entity(troop):
             owner.add_object(troop)

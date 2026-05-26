@@ -57,7 +57,7 @@ class Troop(Entity):
         # Physical Attributes
         self.radius = radius
         self.size = self.radius * 16
-        self.position -= Vector2(self.size, self.size)  # Position adjusting to center to the cell
+        self.position += Vector2(self.size, self.size)  # Position adjusting to center to the cell
 
         self.mass = mass
 

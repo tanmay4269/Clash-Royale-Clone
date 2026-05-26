@@ -74,6 +74,7 @@ class Archers(Entity):
             owner, row, col,
             **archer_entity_properties,
         )
+        self.position += Vector2(8, 8)
         self.units = []
         self.unit_radius = archer_troop_shooter_properties["radius"]
         

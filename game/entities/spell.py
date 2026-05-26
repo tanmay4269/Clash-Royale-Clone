@@ -31,7 +31,7 @@ class Spell(Entity):
         self.crown_tower_damage = crown_tower_damage
         self.size = 0.0
 
-        self.position = Vector2((col - 0.5) * 16, (row - 0.5) * 16)
+        self.position = Vector2((col + 0.5) * 16, (row + 0.5) * 16)
         
         if owner is not None:
             self.start_position = owner.king_tower.position.copy()
