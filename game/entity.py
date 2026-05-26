@@ -60,6 +60,10 @@ class Entity:
 
     CELL_OCCUPANCY_LAYERS = 3  # Excluding the trivial 0th layer
 
+    @classmethod
+    def get_image_path(cls) -> str | None:
+        return getattr(cls, "_image_path", None)
+
     def __init__(
         self, owner, row, col,
         deploy_cost, deploy_delay,

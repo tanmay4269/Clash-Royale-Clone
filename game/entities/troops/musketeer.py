@@ -6,6 +6,8 @@ from game.entities.projectiles.shotgun_bullet import ShotgunBullet
 
 @EntityRegistry.register("Musketeer")
 class Musketeer(Troop, ProjectileShooter):
+    _image_path = "assets/musketeer.png"
+
     def __init__(self, owner, row, col, **kwargs):
         """Level 11"""
         super().__init__(

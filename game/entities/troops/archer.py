@@ -67,6 +67,8 @@ class Archer(Troop, ProjectileShooter):
 
 @EntityRegistry.register("Archers")
 class Archers(Entity):
+    _image_path = "assets/archers.png"
+
     def __init__(self, owner, row, col, **kwargs):
         super().__init__(
             owner, row, col,

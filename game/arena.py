@@ -209,6 +209,34 @@ class Arena:
         self.draw_hud_panel(screen, scale_factor, get_font)
 
 
+    def _get_card_image(self, card_cls, w, h, radius):
+        if not card_cls:
+            return None
+        if not hasattr(self, '_card_image_cache'):
+            self._card_image_cache = {}
+        key = (card_cls, w, h, radius)
+        if key not in self._card_image_cache:
+            path = card_cls.get_image_path() if hasattr(card_cls, "get_image_path") else None
+            if path:
+                try:
+                    img = pygame.image.load(path).convert_alpha()
+                    scaled_img = pygame.transform.smoothscale(img, (w, h))
+                    
+                    # Round the corners using a blend mask
+                    mask = pygame.Surface((w, h), pygame.SRCALPHA)
+                    pygame.draw.rect(mask, (255, 255, 255, 255), (0, 0, w, h), border_radius=radius)
+                    rounded_img = scaled_img.copy()
+                    rounded_img.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+                    
+                    self._card_image_cache[key] = rounded_img
+                except Exception as e:
+                    print(f"Error loading image for {card_cls.__name__} from {path}: {e}")
+                    self._card_image_cache[key] = None
+            else:
+                self._card_image_cache[key] = None
+        return self._card_image_cache[key]
+
+
     def draw_hud_panel(self, screen, scale_factor=1.0, get_font=None) -> None:
         if get_font is None:
             if not hasattr(self, '_scaled_fonts'):
@@ -311,20 +339,31 @@ class Arena:
             bg_color = (40, 40, 45) if elixir_val < cost else (55, 55, 65)
             pygame.draw.rect(screen, bg_color, card_rect, border_radius=int(4 * scale_factor))
 
-            # Elixir fill animation
+            # Try to get card image, fallback to card letter if not loaded
+            card_img = self._get_card_image(card_cls, card_w, card_h, int(4 * scale_factor))
+            if card_img:
+                screen.blit(card_img, (card_x, card_y))
+
+            # Elixir fill and lock overlays
             if elixir_val < cost:
+                # Draw semi-transparent black lock overlay
+                overlay = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, 140))
+                screen.blit(overlay, (card_x, card_y))
+
+                # Draw translucent purple elixir progress rising from bottom
                 fill_fraction = elixir_val / cost
                 fill_height = int(card_h * fill_fraction)
                 if fill_height > 0:
-                    # Draw purple fill from bottom
-                    fill_rect = pygame.Rect(card_x, card_y + card_h - fill_height, card_w, fill_height)
-                    pygame.draw.rect(screen, (120, 40, 150), fill_rect, border_radius=int(4 * scale_factor))
+                    fill_surf = pygame.Surface((card_w, fill_height), pygame.SRCALPHA)
+                    fill_surf.fill((180, 50, 220, 100))
+                    screen.blit(fill_surf, (card_x, card_y + card_h - fill_height))
             else:
-                # Fully charged card background highlight
-                # Draw a subtle tint of the card's theme color
-                tint_surface = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
-                tint_surface.fill((*color, 40)) # 40/255 opacity tint
-                screen.blit(tint_surface, (card_x, card_y))
+                if not card_img:
+                    # Fully charged card background highlight (fallback if no image)
+                    tint_surface = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+                    tint_surface.fill((*color, 40)) # 40/255 opacity tint
+                    screen.blit(tint_surface, (card_x, card_y))
 
             # Selected Border (Glowing)
             if is_selected:
@@ -332,11 +371,12 @@ class Arena:
             else:
                 pygame.draw.rect(screen, (100, 100, 100), card_rect, width=1, border_radius=int(4 * scale_factor))
 
-            # Card Letter
-            letter_surface = title_font.render(char, True, color)
-            letter_x = card_x + (card_w - letter_surface.get_width()) // 2
-            letter_y = card_y + (card_h - letter_surface.get_height()) // 2
-            screen.blit(letter_surface, (letter_x, letter_y))
+            # Render Card Letter only if image did not load
+            if not card_img:
+                letter_surface = title_font.render(char, True, color)
+                letter_x = card_x + (card_w - letter_surface.get_width()) // 2
+                letter_y = card_y + (card_h - letter_surface.get_height()) // 2
+                screen.blit(letter_surface, (letter_x, letter_y))
 
             # Cost Badge in top-right
             badge_radius = int(6 * scale_factor)
@@ -370,10 +410,14 @@ class Arena:
             char = info["char"]
             color = info["color"]
 
-            next_letter_surface = small_font.render(char, True, color)
-            next_letter_x = next_x + (next_w - next_letter_surface.get_width()) // 2
-            next_letter_y = next_y + (next_h - next_letter_surface.get_height()) // 2
-            screen.blit(next_letter_surface, (next_letter_x, next_letter_y))
+            next_img = self._get_card_image(player.next_card, next_w, next_h, int(3 * scale_factor))
+            if next_img:
+                screen.blit(next_img, (next_x, next_y))
+            else:
+                next_letter_surface = small_font.render(char, True, color)
+                next_letter_x = next_x + (next_w - next_letter_surface.get_width()) // 2
+                next_letter_y = next_y + (next_h - next_letter_surface.get_height()) // 2
+                screen.blit(next_letter_surface, (next_letter_x, next_letter_y))
 
 
     def update(self, dt) -> Tuple[bool, bool]:

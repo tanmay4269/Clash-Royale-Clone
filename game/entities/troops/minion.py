@@ -68,6 +68,8 @@ class Minion(Troop, ProjectileShooter):
 
 @EntityRegistry.register("Minions")
 class Minions(Entity):
+    _image_path = "assets/minions.png"
+
     def __init__(self, owner, row, col, **kwargs):
         super().__init__(
             owner, row, col,

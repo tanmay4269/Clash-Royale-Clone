@@ -3,6 +3,8 @@ from game.entities.spell import Spell
 
 @EntityRegistry.register("Arrows")
 class Arrows(Spell):
+    _image_path = "assets/arrowes.png"
+
     def __init__(self, owner, row, col, **kwargs):
         super().__init__(
             owner=owner, row=row, col=col,

@@ -4,6 +4,8 @@ from game.entities.troop import Troop
 
 @EntityRegistry.register("MiniPEKKA")
 class MiniPEKKA(Troop):
+    _image_path = "assets/minipekka.png"
+
     def __init__(self, owner, row, col, **kwargs):
         super().__init__(
             owner, row, col, 
