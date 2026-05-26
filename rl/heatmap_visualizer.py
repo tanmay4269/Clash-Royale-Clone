@@ -212,31 +212,31 @@ class HeatmapVisualizerWrapper(gym.Wrapper):
             arena_hud_surface.blit(skip_txt_2, (next_x + (next_w - skip_txt_2.get_width()) // 2, skip_bar_y_2 + bar_h + 1))
 
             # --- 3. Draw vertical Eval/Win-rate Bar ---
-            # win_prob for Player 1 (Red on top, Blue on bottom)
+            # win_prob for Player 2 (primary, Blue, bottom)
             win_prob = 1.0 / (1.0 + np.exp(-dp["value_1"]))
-            fill_h = int(H * win_prob)
+            fill_h_red = int(H * (1.0 - win_prob))
             
             # Player 1 is red, Player 2 is blue
             p1_color = (200, 40, 40)
             p2_color = (40, 100, 200)
             
             # Red top (P1), Blue bottom (P2)
-            pygame.draw.rect(surface, p1_color, (0, 0, EVAL_BAR_WIDTH, fill_h))
-            pygame.draw.rect(surface, p2_color, (0, fill_h, EVAL_BAR_WIDTH, H - fill_h))
+            pygame.draw.rect(surface, p1_color, (0, 0, EVAL_BAR_WIDTH, fill_h_red))
+            pygame.draw.rect(surface, p2_color, (0, fill_h_red, EVAL_BAR_WIDTH, H - fill_h_red))
             
             # Mid divider line (50%)
             pygame.draw.line(surface, (255, 255, 255), (0, H // 2), (EVAL_BAR_WIDTH, H // 2), 2)
             
             # Text inside Eval Bar (centered)
-            y_mid_1 = fill_h // 2
-            y_mid_2 = fill_h + (H - fill_h) // 2
+            y_mid_1 = fill_h_red // 2
+            y_mid_2 = fill_h_red + (H - fill_h_red) // 2
             
-            if fill_h > 25:
-                p1_txt = font_medium.render(f"{win_prob*100:.0f}%", True, (255, 255, 255))
+            if fill_h_red > 25:
+                p1_txt = font_medium.render(f"{(1.0 - win_prob)*100:.0f}%", True, (255, 255, 255))
                 surface.blit(p1_txt, (EVAL_BAR_WIDTH // 2 - p1_txt.get_width() // 2, y_mid_1 - p1_txt.get_height() // 2))
                 
-            if (H - fill_h) > 25:
-                p2_txt = font_medium.render(f"{(1 - win_prob)*100:.0f}%", True, (255, 255, 255))
+            if (H - fill_h_red) > 25:
+                p2_txt = font_medium.render(f"{win_prob*100:.0f}%", True, (255, 255, 255))
                 surface.blit(p2_txt, (EVAL_BAR_WIDTH // 2 - p2_txt.get_width() // 2, y_mid_2 - p2_txt.get_height() // 2))
                 
             self._frame_idx += 1

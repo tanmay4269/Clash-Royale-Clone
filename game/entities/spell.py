@@ -1,7 +1,9 @@
 from game.utils import *
-from game.entity import Entity
+from game.entity import Entity, CardCategory
 
 class Spell(Entity):
+    card_category = CardCategory.SPELL
+
     def __init__(
         self, owner, row: int, col: int,
         deploy_cost: int,

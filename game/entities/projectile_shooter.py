@@ -1,8 +1,10 @@
 from game.utils import *
-from game.entity import Entity
+from game.entity import Entity, CardCategory
 
 
 class ProjectileShooter(Entity):
+    card_category = CardCategory.RANGED
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

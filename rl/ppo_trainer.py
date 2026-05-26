@@ -367,16 +367,16 @@ class Trainer:
 
                 # --- Get actions for all envs ---
                 with t.no_grad():
-                    actions_1 = [None] * N
-                    log_probs_1 = [None] * N
-                    values_1 = [None] * N
                     actions_2 = [None] * N
+                    log_probs_2 = [None] * N
+                    values_2 = [None] * N
+                    actions_1 = [None] * N
 
                     for i in range(N):
                         obs_1 = self._normalize_obs(states_1[i])
                         obs_2 = self._normalize_obs(states_2[i])
-                        actions_1[i], log_probs_1[i], _, values_1[i] = net_1.get_action_and_value(obs_1)
-                        actions_2[i], _, _, _ = net_2.get_action_and_value(obs_2)
+                        actions_2[i], log_probs_2[i], _, values_2[i] = net_1.get_action_and_value(obs_2)
+                        actions_1[i], _, _, _ = net_2.get_action_and_value(obs_1)
 
                 # --- Build joined actions ---
                 joined_actions = [self.join_actions(actions_1[i], actions_2[i]) for i in range(N)]
@@ -409,8 +409,8 @@ class Trainer:
 
                     if steps_collected < self.cfg.buffer.n_steps:
                         buffers[i].push(
-                            states_1[i], actions_1[i], log_probs_1[i], 
-                            reward[0], values_1[i], terminated
+                            states_2[i], actions_2[i], log_probs_2[i], 
+                            reward[1], values_2[i], terminated
                         )
                         """
                             If a game ends simply because time ran out (truncated), GAE will set (1 - next_done) to 0. 
@@ -428,9 +428,9 @@ class Trainer:
                     if done:
                         # TODO: get this from the env instead
                         score = 0
-                        if ep_return[i][0] > ep_return[i][1]:
+                        if ep_return[i][1] > ep_return[i][0]:
                             score = 1
-                        elif ep_return[i][0] == ep_return[i][1]:
+                        elif ep_return[i][1] == ep_return[i][0]:
                             score = 0.5
 
                         # ELO update
@@ -441,7 +441,7 @@ class Trainer:
                         episode_info = info.get("episode", None)
                         self.logger.on_episode_end_simple(
                             terminated, truncated,
-                            self.current_elo, ep_return[i][0], score,
+                            self.current_elo, ep_return[i][1], score,
                             episode_info=episode_info,
                         )
 

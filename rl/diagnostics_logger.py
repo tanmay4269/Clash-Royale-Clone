@@ -43,19 +43,19 @@ class DiagnosticsLogger:
         self._ep_pos_y = []
         self._ep_durations = []
 
-    def on_step(self, action_1, env):
-        # Collect metrics for Player 1
-        action_1_cpu = {k: v.cpu().numpy() for k, v in action_1.items()}
+    def on_step(self, action_2, env):
+        # Collect metrics for Player 2
+        action_2_cpu = {k: v.cpu().numpy() for k, v in action_2.items()}
         self.current_ep_steps += 1
         
         # We unwrap twice to ensure we reach the underlying cr_gym_env if wrapped
         arena = env.unwrapped.arena
-        self.current_ep_elixir_sum += arena.player_side_1.elixirs
+        self.current_ep_elixir_sum += arena.player_side_2.elixirs
         
-        self.ep_skips += int(action_1_cpu["skip"].item())
-        if action_1_cpu["skip"].item() == 0:
-            self.ep_decks.append(int(action_1_cpu["deck_idx"].item()))
-            pos = int(action_1_cpu["position"].item())
+        self.ep_skips += int(action_2_cpu["skip"].item())
+        if action_2_cpu["skip"].item() == 0:
+            self.ep_decks.append(int(action_2_cpu["deck_idx"].item()))
+            pos = int(action_2_cpu["position"].item())
             self.ep_pos_x.append(pos % arena.width)
             self.ep_pos_y.append(pos // arena.width)
 
@@ -134,8 +134,8 @@ class DiagnosticsLogger:
         self._ep_scores.append(score)
 
         if episode_info is not None:
-            self.buffer_towers_killed_by_p1 += episode_info.get("towers_killed_by_p1", 0)
-            self.buffer_towers_killed_by_p2 += episode_info.get("towers_killed_by_p2", 0)
+            self.buffer_towers_killed_by_p1 += episode_info.get("towers_killed_by_p2", 0)
+            self.buffer_towers_killed_by_p2 += episode_info.get("towers_killed_by_p1", 0)
             self._ep_avg_elixirs.append(episode_info.get("avg_elixir_p1", 0.0))
             self._ep_skip_ratios.append(episode_info.get("skip_ratio", 0.0))
             self._ep_deck_indices.extend(episode_info.get("deck_indices", []))

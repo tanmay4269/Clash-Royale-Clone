@@ -25,6 +25,12 @@ class EntityType:
         return 4
 
 
+class CardCategory:
+    MELEE  = 0
+    RANGED = 1
+    SPELL  = 2
+
+
 class EntityRegistry:
     _registry = {}
     _dummy_instances = {}
@@ -64,6 +70,7 @@ class Entity:
     mass = 0.0
     speed = 0.0
     radius = 0.0
+    card_category = CardCategory.MELEE
 
     @classmethod
     def get_image_path(cls) -> str | None:

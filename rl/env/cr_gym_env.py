@@ -150,13 +150,7 @@ class ClashRoyaleEnv(gym.Env):
 
 
     def _get_card_category(self, x):
-        name = x.__name__ if isinstance(x, type) else x.__class__.__name__
-        if name in ["Fireball", "Arrows"] or (not isinstance(x, type) and isinstance(x, Spell)) or (isinstance(x, type) and issubclass(x, Spell)):
-            return 2  # Spell
-        elif name in ["Musketeer", "Archers", "Minions", "PrincessTower", "KingTower"] or (not isinstance(x, type) and isinstance(x, ProjectileShooter)) or (isinstance(x, type) and issubclass(x, ProjectileShooter)):
-            return 1  # Ranged
-        else:
-            return 0  # Melee
+        return getattr(x, "card_category", 0)
 
 
     def _get_card_class_properties(self, card_cls):
@@ -387,14 +381,14 @@ class ClashRoyaleEnv(gym.Env):
 
 
     def step(self, action):
-        # Accumulate per-step diagnostics for player 1
+        # Accumulate per-step diagnostics for player 2 (primary player)
         self._ep_steps += 1
-        self._ep_elixir_sum += float(self.arena.player_side_1.elixirs)
-        p1_skip = int(action["player_1_skip"])
-        self._ep_skips += p1_skip
-        if p1_skip == 0:
-            self._ep_decks.append(int(action["player_1_card_idx"]))
-            pos = action["player_1_card_position"]
+        self._ep_elixir_sum += float(self.arena.player_side_2.elixirs)
+        p2_skip = int(action["player_2_skip"])
+        self._ep_skips += p2_skip
+        if p2_skip == 0:
+            self._ep_decks.append(int(action["player_2_card_idx"]))
+            pos = action["player_2_card_position"]
             self._ep_pos_x.append(int(pos[0]))
             self._ep_pos_y.append(int(pos[1]))
 
