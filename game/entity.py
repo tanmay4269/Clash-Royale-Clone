@@ -12,6 +12,7 @@ class EntityType:
     GROUND      = 0
     AIR         = 1
     BUILDING    = 2
+    SPELL       = 3
 
     def get_all():
         return set({
@@ -21,7 +22,7 @@ class EntityType:
         })
 
     def num_types():
-        return 3
+        return 4
 
 
 class EntityRegistry:
@@ -59,6 +60,10 @@ class Entity:
     #   while projectile can be merged as a child of this class to stay DRY
 
     CELL_OCCUPANCY_LAYERS = 3  # Excluding the trivial 0th layer
+
+    mass = 0.0
+    speed = 0.0
+    radius = 0.0
 
     @classmethod
     def get_image_path(cls) -> str | None:

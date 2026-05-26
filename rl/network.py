@@ -13,67 +13,63 @@ class ActorCritic(nn.Module):
         entity_encoder_in_ch, 
         entity_encoder_mid_ch, 
         entity_encoder_out_ch,
-
+ 
         trunk_extra_in_ch,
         trunk_mid_ch,
-
-        num_cards_in_deck,
-        max_num_cards,
-        position_space_width,
-        position_space_height,
-
+ 
+        num_cards_in_deck=4,
+        max_num_cards=10,
+        position_space_width=18,
+        position_space_height=32,
+ 
         invalid_position_mask=None,
         max_elixirs=10,
+        deploy_cost_idx=2,
     ):
         super().__init__()
-
+ 
         self.max_num_cards = max_num_cards
         self.position_space_width  = position_space_width
         self.position_space_height = position_space_height
         
         self.invalid_position_mask = invalid_position_mask
         self.max_elixirs = max_elixirs
-
-        # Deck order must match cr_gym_env.step(): idx 0=Knight, 1=Giant, 2=MiniPEKKA
-        _deck_classes = [Knight, Giant, MiniPEKKA]
-        _costs = [EntityRegistry._dummy_instances[cls.__name__].deploy_cost for cls in _deck_classes]
-        self.register_buffer("deck_deploy_costs", t.tensor(_costs, dtype=t.float32))
-
-
+        self.deploy_cost_idx = deploy_cost_idx
+ 
         self.entity_encoder = nn.Sequential(
             nn.Linear(entity_encoder_in_ch, entity_encoder_mid_ch),
             nn.LayerNorm(entity_encoder_mid_ch),
             nn.ReLU(),
-
+ 
             nn.Linear(entity_encoder_mid_ch, entity_encoder_mid_ch),
             nn.LayerNorm(entity_encoder_mid_ch),
             nn.ReLU(),
-
+ 
             nn.Linear(entity_encoder_mid_ch, entity_encoder_out_ch),
         )
-
+ 
         self.trunk = nn.Sequential(
-            nn.Linear(trunk_extra_in_ch + (3 + 3 + 1 + 1) * entity_encoder_out_ch, trunk_mid_ch),
+            nn.Linear(trunk_extra_in_ch + (3 + 3 + 1 + 1 + 4 + 1) * entity_encoder_out_ch, trunk_mid_ch),
             nn.LayerNorm(trunk_mid_ch),
             nn.ReLU(),
-
+ 
             nn.Linear(trunk_mid_ch, trunk_mid_ch),
             nn.LayerNorm(trunk_mid_ch),
             nn.ReLU(),
         )
-
+ 
         self.critic = nn.Sequential(
             nn.Linear(trunk_mid_ch, 1)
         )
-
+ 
         self.actor_skip_net = nn.Sequential(
             nn.Linear(trunk_mid_ch, 1)
         )
-
+ 
         self.actor_deck_idx_net = nn.Sequential(
             nn.Linear(trunk_mid_ch, num_cards_in_deck)
         )
-
+ 
         self.actor_position_net = nn.Sequential(
             nn.Linear(trunk_mid_ch, position_space_width * position_space_height)
         )
@@ -112,6 +108,9 @@ class ActorCritic(nn.Module):
             count = mask.sum(dim=1).clamp(min=1.0)
             return (embeddings * mask).sum(dim=1) / count
 
+        hand_embeddings = self.entity_encoder(obs["my_hand"])  # (B, 4, entity_encoder_out_ch)
+        next_card_embeddings = self.entity_encoder(obs["my_next_card"].unsqueeze(1)).squeeze(1)  # (B, entity_encoder_out_ch)
+
         trunk_input = t.cat([
             obs["game_completion_fraction"],
             obs["elixirs"],
@@ -119,7 +118,9 @@ class ActorCritic(nn.Module):
             opponent_crown_tower_embeddings.flatten(start_dim=1),           # (B, 3 * entity_encoder_out_ch)
             masked_mean(my_card_embeddings, obs["my_cards"]),               # (B, entity_encoder_out_ch)
             masked_mean(opponent_card_embeddings, obs["opponent_cards"]),   # (B, entity_encoder_out_ch)
-        ], dim=-1).to(dtype=t.float32)  # (B, trunk_extra_in_ch + entity_encoder_out_ch)
+            hand_embeddings.flatten(start_dim=1),                           # (B, 4 * entity_encoder_out_ch)
+            next_card_embeddings,                                           # (B, entity_encoder_out_ch)
+        ], dim=-1).to(dtype=t.float32)  # (B, trunk_extra_in_ch + 13 * entity_encoder_out_ch)
 
         trunk_out = self.trunk(trunk_input)
 
@@ -161,7 +162,9 @@ class ActorCritic(nn.Module):
 
         # --- Elixir masks ---
         raw_elixirs = (obs["elixirs"] + 1.0) / 2.0 * self.max_elixirs  # (B, 1)
-        elixir_mask = self.deck_deploy_costs.unsqueeze(0) > raw_elixirs  # (B, num_cards)
+        hand_normalized_costs = obs["my_hand"][..., self.deploy_cost_idx]  # (B, 4)
+        hand_raw_costs = hand_normalized_costs * (self.max_elixirs / 2.0) + (self.max_elixirs / 2.0)
+        elixir_mask = hand_raw_costs > raw_elixirs  # (B, 4)
         deck_logits = deck_logits.masked_fill(elixir_mask, float('-inf'))
 
         all_masked = elixir_mask.all(dim=-1)  # (B,): can't afford anything
@@ -227,13 +230,14 @@ class ActorCriticV2(nn.Module):
         use_last_layer_norms=False,
         append_deck_info_to_position_head_input=False,
 
-        num_cards_in_deck=3,
-        max_num_cards=3,
+        num_cards_in_deck=4,
+        max_num_cards=10,
         position_space_width=18,
         position_space_height=32,
 
         invalid_position_mask=None,
         max_elixirs=10,
+        deploy_cost_idx=2,
     ):
         super().__init__()
 
@@ -246,6 +250,7 @@ class ActorCriticV2(nn.Module):
         
         self.invalid_position_mask = invalid_position_mask
         self.max_elixirs = max_elixirs
+        self.deploy_cost_idx = deploy_cost_idx
 
         # Activation function selection
         if activation_fn == 'relu':
@@ -282,7 +287,7 @@ class ActorCriticV2(nn.Module):
 
         def make_trunk():
             return nn.Sequential(
-                layer_init(nn.Linear(trunk_extra_in_ch + (3 + 3 + 1 + 1) * entity_encoder_out_ch, trunk_mid_ch)),
+                layer_init(nn.Linear(trunk_extra_in_ch + (3 + 3 + 1 + 1 + 4 + 1) * entity_encoder_out_ch, trunk_mid_ch)),
                 nn.LayerNorm(trunk_mid_ch),
                 activation_layer(),
 
@@ -322,11 +327,6 @@ class ActorCriticV2(nn.Module):
             layer_init,
             activation_layer
         )
-
-        # Deck order must match cr_gym_env.step(): idx 0=Knight, 1=Giant, 2=MiniPEKKA
-        _deck_classes = [Knight, Giant, MiniPEKKA]
-        _costs = [EntityRegistry._dummy_instances[cls.__name__].deploy_cost for cls in _deck_classes]
-        self.register_buffer("deck_deploy_costs", t.tensor(_costs, dtype=t.float32))
 
 
     def make_position_head(self, use_cnn_position_decoder, input_ch, position_space_width, position_space_height, layer_init, activation_layer):
@@ -383,7 +383,7 @@ class ActorCriticV2(nn.Module):
             nn.Flatten(),
         )
 
-    def get_trunk_input(self, obs, all_embeddings):
+    def get_trunk_input(self, obs, all_embeddings, encoder):
         my_card_embeddings       = all_embeddings[:, 0 : self.max_num_cards]
         opponent_card_embeddings = all_embeddings[:, self.max_num_cards : 2 * self.max_num_cards]
 
@@ -395,6 +395,9 @@ class ActorCriticV2(nn.Module):
             count = mask.sum(dim=1).clamp(min=1.0)
             return (embeddings * mask).sum(dim=1) / count
 
+        hand_embeddings = encoder(obs["my_hand"])  # (B, 4, entity_encoder_out_ch)
+        next_card_embeddings = encoder(obs["my_next_card"].unsqueeze(1)).squeeze(1)  # (B, entity_encoder_out_ch)
+
         trunk_input = t.cat([
             obs["game_completion_fraction"],
             obs["elixirs"],
@@ -402,7 +405,9 @@ class ActorCriticV2(nn.Module):
             opponent_crown_tower_embeddings.flatten(start_dim=1),           # (B, 3 * entity_encoder_out_ch)
             masked_mean(my_card_embeddings, obs["my_cards"]),               # (B, entity_encoder_out_ch)
             masked_mean(opponent_card_embeddings, obs["opponent_cards"]),   # (B, entity_encoder_out_ch)
-        ], dim=-1).to(dtype=t.float32)                                      # (B, trunk_extra_in_ch + entity_encoder_out_ch) 
+            hand_embeddings.flatten(start_dim=1),                           # (B, 4 * entity_encoder_out_ch)
+            next_card_embeddings,                                           # (B, entity_encoder_out_ch)
+        ], dim=-1).to(dtype=t.float32)                                      # (B, trunk_extra_in_ch + 13 * entity_encoder_out_ch) 
 
         return trunk_input
 
@@ -430,7 +435,7 @@ class ActorCriticV2(nn.Module):
         if not self.disjoint_actor_critic:
             all_embeddings = self.shared_entity_encoder(all_entities)
 
-            shared_trunk_input = self.get_trunk_input(obs, all_embeddings)
+            shared_trunk_input = self.get_trunk_input(obs, all_embeddings, self.shared_entity_encoder)
             shared_trunk_out   = self.shared_trunk(shared_trunk_input)
 
             critic_head_input  = shared_trunk_out
@@ -439,8 +444,8 @@ class ActorCriticV2(nn.Module):
             critic_embeddings = self.critic_entity_encoder(all_entities)
             actor_embeddings  = self.actor_entity_encoder(all_entities)
 
-            critic_trunk_input = self.get_trunk_input(obs, critic_embeddings)
-            actor_trunk_input  = self.get_trunk_input(obs, actor_embeddings)
+            critic_trunk_input = self.get_trunk_input(obs, critic_embeddings, self.critic_entity_encoder)
+            actor_trunk_input  = self.get_trunk_input(obs, actor_embeddings, self.actor_entity_encoder)
 
             critic_head_input = self.critic_trunk(critic_trunk_input)
             actor_heads_inputs  = self.actor_trunk(actor_trunk_input)
@@ -486,7 +491,9 @@ class ActorCriticV2(nn.Module):
 
         # --- Elixir masks ---
         raw_elixirs = (obs["elixirs"] + 1.0) / 2.0 * self.max_elixirs  # (B, 1)
-        elixir_mask = self.deck_deploy_costs.unsqueeze(0) > raw_elixirs  # (B, num_cards)
+        hand_normalized_costs = obs["my_hand"][..., self.deploy_cost_idx]  # (B, 4)
+        hand_raw_costs = hand_normalized_costs * (self.max_elixirs / 2.0) + (self.max_elixirs / 2.0)
+        elixir_mask = hand_raw_costs > raw_elixirs  # (B, 4)
         deck_logits = deck_logits.masked_fill(elixir_mask, float('-inf'))
 
         all_masked = elixir_mask.all(dim=-1)  # (B,): can't afford anything
@@ -621,7 +628,7 @@ if __name__ == "__main__":
     for disjoint_actor_critic, activation_fn, use_cnn_position_decoder, use_last_layer_norms, append_deck_info_to_position_head_input in \
         list(product([False, True], ['relu', 'tanh', 'elu'], [False, True], [False, True], [False, True])):
 
-        net = ActorCritic(
+        net = ActorCriticV2(
             entity_encoder_in_ch=26,
             entity_encoder_mid_ch=64,
             entity_encoder_out_ch=32,
@@ -635,10 +642,11 @@ if __name__ == "__main__":
             use_last_layer_norms=use_last_layer_norms,
             append_deck_info_to_position_head_input=append_deck_info_to_position_head_input,
 
-            num_cards_in_deck=3,
+            num_cards_in_deck=4,
             max_num_cards=10,
             position_space_width=18,
             position_space_height=32,
+            deploy_cost_idx=2,
         )
 
         dummy_obs = {
@@ -648,6 +656,8 @@ if __name__ == "__main__":
             "opponent_cards": t.zeros((1, 10, 26)),
             "my_crown_towers": t.zeros((1, 3, 26)),
             "opponent_crown_towers": t.zeros((1, 3, 26)),
+            "my_hand": t.zeros((1, 4, 26)),
+            "my_next_card": t.zeros((1, 26)),
         }
 
         action, log_prob, entropy, value = net.get_action_and_value(dummy_obs)

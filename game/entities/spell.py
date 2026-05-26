@@ -16,7 +16,7 @@ class Spell(Entity):
         super().__init__(
             owner=owner, row=row, col=col,
             deploy_cost=deploy_cost, deploy_delay=deploy_delay,
-            entity_type=EntityType.GROUND,
+            entity_type=EntityType.SPELL,
             hitpoints=1,
             damage=damage,
             attack_radius=radius,

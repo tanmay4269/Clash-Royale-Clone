@@ -219,7 +219,10 @@ class Arena:
             path = card_cls.get_image_path() if hasattr(card_cls, "get_image_path") else None
             if path:
                 try:
-                    img = pygame.image.load(path).convert_alpha()
+                    try:
+                        img = pygame.image.load(path).convert_alpha()
+                    except pygame.error:
+                        img = pygame.image.load(path)
                     scaled_img = pygame.transform.smoothscale(img, (w, h))
                     
                     # Round the corners using a blend mask

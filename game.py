@@ -94,6 +94,8 @@ def split_observations(obs, env, arena, max_num_objects):
         "opponent_cards":           p2t,
         "my_crown_towers":          ct1,
         "opponent_crown_towers":    ct2,
+        "my_hand":                  t.tensor(np.array(obs["player_1_hand"], dtype=np.float32)).unsqueeze(0),
+        "my_next_card":             t.tensor(np.array(obs["player_1_next_card"], dtype=np.float32)).unsqueeze(0),
     }
 
     obs_2 = {
@@ -103,6 +105,8 @@ def split_observations(obs, env, arena, max_num_objects):
         "opponent_cards":           rot180(p1t),
         "my_crown_towers":          rot180(ct2),
         "opponent_crown_towers":    rot180(ct1),
+        "my_hand":                  t.tensor(np.array(obs["player_2_hand"], dtype=np.float32)).unsqueeze(0),
+        "my_next_card":             t.tensor(np.array(obs["player_2_next_card"], dtype=np.float32)).unsqueeze(0),
     }
 
     return obs_1, obs_2
@@ -208,7 +212,7 @@ class Game:
         if os.path.isfile(checkpoint_path):
             # Load ActorCritic model from checkpoint
             network = ActorCritic(
-                entity_encoder_in_ch=16,
+                entity_encoder_in_ch=self._env_wrap.flat_card_space.shape[0],
                 entity_encoder_mid_ch=64,
                 entity_encoder_out_ch=32,
 
@@ -221,6 +225,7 @@ class Game:
                 position_space_height=arena.height,
                 invalid_position_mask=mask_tensor,
                 max_elixirs=10,
+                deploy_cost_idx=self._env_wrap.flattened_card_space_indices["deploy_cost"][0],
             )
             try:
                 state_dict = t.load(checkpoint_path, map_location=None if t.cuda.is_available() else 'cpu', weights_only=True)

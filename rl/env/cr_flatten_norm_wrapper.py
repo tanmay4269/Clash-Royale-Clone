@@ -37,9 +37,13 @@ class CRFlattenNormWrapper(gym.ObservationWrapper):
             "player_1_elixirs":         base["player_1_elixirs"],
             "player_1_cards":           spaces.Sequence(self.flat_card_space),
             "player_1_crown_towers":    spaces.Tuple((self.flat_tower_space,) * 3),
+            "player_1_hand":            spaces.Tuple((self.flat_card_space,) * 4),
+            "player_1_next_card":       self.flat_card_space,
             "player_2_elixirs":         base["player_2_elixirs"],
             "player_2_cards":           spaces.Sequence(self.flat_card_space),
             "player_2_crown_towers":    spaces.Tuple((self.flat_tower_space,) * 3),
+            "player_2_hand":            spaces.Tuple((self.flat_card_space,) * 4),
+            "player_2_next_card":       self.flat_card_space,
         })
         
     @staticmethod
@@ -68,9 +72,13 @@ class CRFlattenNormWrapper(gym.ObservationWrapper):
             "player_1_elixirs":         (obs["player_1_elixirs"] / 10) * 2.0 - 1.0,
             "player_1_cards":           [self._flat_norm_card(c) for c in obs["player_1_cards"]],
             "player_1_crown_towers":    tuple(self._flat_norm_tower(obs["player_1_crown_towers"][k]) for k in self.TOWER_SUBKEYS),
+            "player_1_hand":            tuple(self._flat_norm_card(c) for c in obs["player_1_hand"]),
+            "player_1_next_card":       self._flat_norm_card(obs["player_1_next_card"]),
             "player_2_elixirs":         (obs["player_2_elixirs"] / 10) * 2.0 - 1.0,
             "player_2_cards":           [self._flat_norm_card(c) for c in obs["player_2_cards"]],
             "player_2_crown_towers":    tuple(self._flat_norm_tower(obs["player_2_crown_towers"][k]) for k in self.TOWER_SUBKEYS),
+            "player_2_hand":            tuple(self._flat_norm_card(c) for c in obs["player_2_hand"]),
+            "player_2_next_card":       self._flat_norm_card(obs["player_2_next_card"]),
         }
         
         if PROFILE_ENV:

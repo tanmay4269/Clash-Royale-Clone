@@ -69,9 +69,9 @@ class DiagnosticsLogger:
         towers_killed_by_p1 = 0
         towers_killed_by_p2 = 0
         for t_name in ["king_tower", "princess_tower_1", "princess_tower_2"]:
-            if float(env.unwrapped._cur_obs["player_2_crown_towers"][t_name]["health"]) <= 0:
+            if float(env.unwrapped._cur_obs["player_2_crown_towers"][t_name]["health"][0]) <= 0:
                 towers_killed_by_p1 += 1
-            if float(env.unwrapped._cur_obs["player_1_crown_towers"][t_name]["health"]) <= 0:
+            if float(env.unwrapped._cur_obs["player_1_crown_towers"][t_name]["health"][0]) <= 0:
                 towers_killed_by_p2 += 1
 
         self.buffer_towers_killed_by_p1 += towers_killed_by_p1

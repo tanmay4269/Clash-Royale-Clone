@@ -13,8 +13,12 @@ from gymnasium.envs.registration import register
 from game.arena import Arena
 from game.entity import EntityType, Entity
 from game.entities.buildings.crown_tower import CrownTower
+from game.entities.spell import Spell
+from game.entities.projectile_shooter import ProjectileShooter
+from game.entities.troop import Troop
 
 from game.entities.troops import *
+from game.entities.spells import *
 
 
 register(
@@ -46,7 +50,7 @@ class ClashRoyaleEnv(gym.Env):
                 
                 "entity_type": spaces.Discrete(EntityType.num_types()), 
 
-                "target_types": spaces.MultiBinary(EntityType.num_types()), 
+                "target_types": spaces.MultiBinary(3), 
 
                 # x, y
                 "position": spaces.Box(  
@@ -68,7 +72,12 @@ class ClashRoyaleEnv(gym.Env):
                 "hit_speed": spaces.Box(0.0, EntityRegistry.aggregate("hit_speed")["max"], shape=(1,), dtype=np.float32),
                 "first_hit_speed": spaces.Box(0.0, EntityRegistry.aggregate("first_hit_speed")["max"], shape=(1,), dtype=np.float32),
                 
-                # Maybe add what stage of its hit cycle is it if the model can't seem to figure this out
+                "radius": spaces.Box(0.0, EntityRegistry.aggregate("radius")["max"], shape=(1,), dtype=np.float32),
+                "speed": spaces.Box(0.0, EntityRegistry.aggregate("speed")["max"], shape=(1,), dtype=np.float32),
+                "mass": spaces.Box(0.0, EntityRegistry.aggregate("mass")["max"], shape=(1,), dtype=np.float32),
+                "card_category": spaces.Discrete(3),  # 0: Melee, 1: Ranged, 2: Spell
+                "deploy_progress": spaces.Box(0.0, 1.0, shape=(1,), dtype=np.float32),
+                "attack_progress": spaces.Box(0.0, 1.0, shape=(1,), dtype=np.float32),
             })
 
         crown_towers_space = spaces.Dict({
@@ -82,14 +91,18 @@ class ClashRoyaleEnv(gym.Env):
             "player_1_elixirs": spaces.Discrete(self.arena.player_side_1.max_elixirs + 1),
             "player_1_cards": spaces.Sequence(get_entity_space()),
             "player_1_crown_towers": crown_towers_space,
+            "player_1_hand": spaces.Tuple((get_entity_space(),) * 4),
+            "player_1_next_card": get_entity_space(),
 
             "player_2_elixirs": spaces.Discrete(self.arena.player_side_2.max_elixirs + 1),
             "player_2_cards": spaces.Sequence(get_entity_space()),
             "player_2_crown_towers": crown_towers_space,
+            "player_2_hand": spaces.Tuple((get_entity_space(),) * 4),
+            "player_2_next_card": get_entity_space(),
         })
 
         ### Action Space ###
-        self.NUM_CARDS_IN_DECK = 3  # TODO: ofc find a better way
+        self.NUM_CARDS_IN_DECK = 4
         position_space = spaces.Box(  
             low=np.array([0.0, 0.0]),
             high=np.array([
@@ -136,6 +149,131 @@ class ClashRoyaleEnv(gym.Env):
         self._ep_pos_y = []
 
 
+    def _get_card_category(self, x):
+        name = x.__name__ if isinstance(x, type) else x.__class__.__name__
+        if name in ["Fireball", "Arrows"] or (not isinstance(x, type) and isinstance(x, Spell)) or (isinstance(x, type) and issubclass(x, Spell)):
+            return 2  # Spell
+        elif name in ["Musketeer", "Archers", "Minions", "PrincessTower", "KingTower"] or (not isinstance(x, type) and isinstance(x, ProjectileShooter)) or (isinstance(x, type) and issubclass(x, ProjectileShooter)):
+            return 1  # Ranged
+        else:
+            return 0  # Melee
+
+
+    def _get_card_class_properties(self, card_cls):
+        name = card_cls.__name__
+        dummy = EntityRegistry._dummy_instances[name]
+        
+        properties = {
+            "radius": getattr(dummy, "radius", 0.0),
+            "speed": getattr(dummy, "speed", 0.0),
+            "mass": getattr(dummy, "mass", 0.0),
+        }
+        
+        if name == "Archers":
+            properties["radius"] = 0.35
+            properties["speed"] = 10.0
+            properties["mass"] = 1.0
+        elif name == "Minions":
+            properties["radius"] = 0.3
+            properties["speed"] = 15.0
+            properties["mass"] = 0.8
+        elif name == "Arrows":
+            properties["radius"] = 3.5
+            
+        return properties
+
+
+    def _get_entity_obs(self, obj):
+        target_types_arr = np.array([
+            int(EntityType.GROUND   in obj.target_types),
+            int(EntityType.AIR      in obj.target_types),
+            int(EntityType.BUILDING in obj.target_types),
+        ], dtype=np.int8)
+
+        category = self._get_card_category(obj)
+
+        if obj.deploy_delay > 0:
+            deploy_progress = np.clip(obj._deploy_timer / obj.deploy_delay, 0.0, 1.0)
+        else:
+            deploy_progress = 1.0
+
+        if isinstance(obj, Spell):
+            if obj.explosion_duration > 0:
+                attack_progress = np.clip(obj.explosion_timer / obj.explosion_duration, 0.0, 1.0)
+            else:
+                attack_progress = 1.0
+        else:
+            limit = obj.first_hit_speed if getattr(obj, "_is_first_hit", False) else obj.hit_speed
+            if limit > 0:
+                attack_progress = np.clip(obj._attack_timer / limit, 0.0, 1.0)
+            else:
+                attack_progress = 1.0
+
+        return {
+            "deploy_cost": np.array([obj.deploy_cost], dtype=np.float32),
+            "deploy_delay": np.array([obj.deploy_delay], dtype=np.float32),
+
+            "entity_type": obj.entity_type,
+            "target_types": target_types_arr,
+
+            "position": np.array([obj.position.x, obj.position.y], dtype=np.float32),
+            
+            "health": np.array([obj.health], dtype=np.float32),
+            "hitpoints": np.array([obj.hitpoints], dtype=np.float32),
+            
+            "damage": np.array([obj.damage], dtype=np.float32),
+            "attack_radius_cells": np.array([obj.attack_radius_cells], dtype=np.float32),
+
+            "hit_speed": np.array([obj.hit_speed], dtype=np.float32),
+            "first_hit_speed": np.array([obj.first_hit_speed], dtype=np.float32),
+
+            "radius": np.array([getattr(obj, "radius", 0.0)], dtype=np.float32),
+            "speed": np.array([getattr(obj, "speed", 0.0)], dtype=np.float32),
+            "mass": np.array([getattr(obj, "mass", 0.0)], dtype=np.float32),
+            "card_category": category,
+            "deploy_progress": np.array([deploy_progress], dtype=np.float32),
+            "attack_progress": np.array([attack_progress], dtype=np.float32),
+        }
+
+
+    def _get_card_class_obs(self, card_cls):
+        dummy = EntityRegistry._dummy_instances[card_cls.__name__]
+        target_types_arr = np.array([
+            int(EntityType.GROUND   in dummy.target_types),
+            int(EntityType.AIR      in dummy.target_types),
+            int(EntityType.BUILDING in dummy.target_types),
+        ], dtype=np.int8)
+
+        category = self._get_card_category(card_cls)
+        props = self._get_card_class_properties(card_cls)
+
+        return {
+            "deploy_cost": np.array([dummy.deploy_cost], dtype=np.float32),
+            "deploy_delay": np.array([dummy.deploy_delay], dtype=np.float32),
+
+            "entity_type": dummy.entity_type,
+            "target_types": target_types_arr,
+
+            "position": np.zeros(2, dtype=np.float32),
+            
+            "health": np.array([dummy.hitpoints], dtype=np.float32),
+            "hitpoints": np.array([dummy.hitpoints], dtype=np.float32),
+            
+            "damage": np.array([dummy.damage], dtype=np.float32),
+            "attack_radius_cells": np.array([dummy.attack_radius_cells], dtype=np.float32),
+
+            "hit_speed": np.array([dummy.hit_speed], dtype=np.float32),
+            "first_hit_speed": np.array([dummy.first_hit_speed], dtype=np.float32),
+
+            "radius": np.array([props["radius"]], dtype=np.float32),
+            "speed": np.array([props["speed"]], dtype=np.float32),
+            "mass": np.array([props["mass"]], dtype=np.float32),
+            "card_category": category,
+            "deploy_progress": np.zeros(1, dtype=np.float32),
+            "attack_progress": np.zeros(1, dtype=np.float32),
+        }
+
+
     def _get_obs(self):
         obs = {}
 
@@ -152,34 +290,10 @@ class ClashRoyaleEnv(gym.Env):
                 continue
             
             owner = obs["player_1_cards"] if obj.owner == self.arena.player_side_1 else obs["player_2_cards"]
-            owner.append({
-                "deploy_cost": np.array([obj.deploy_cost], dtype=np.float32),
-                "deploy_delay": np.array([obj.deploy_delay], dtype=np.float32),
-
-                "entity_type": obj.entity_type,
-                "target_types": np.array([
-                    int(EntityType.GROUND   in obj.target_types),
-                    int(EntityType.AIR      in obj.target_types),
-                    int(EntityType.BUILDING in obj.target_types),
-                ], dtype=np.int8),
-
-                "position": np.array([obj.position.x, obj.position.y], dtype=np.float32),
-                
-                "health": np.array([obj.health], dtype=np.float32),
-                "hitpoints": np.array([obj.hitpoints], dtype=np.float32),
-                
-                "damage": np.array([obj.damage], dtype=np.float32),
-                "attack_radius_cells": np.array([obj.attack_radius_cells], dtype=np.float32),
-
-                "hit_speed": np.array([obj.hit_speed], dtype=np.float32),
-                "first_hit_speed": np.array([obj.first_hit_speed], dtype=np.float32),
-            })
-
+            owner.append(self._get_entity_obs(obj))
 
         ### Crown Towers ###
         obs["player_1_crown_towers"], obs["player_2_crown_towers"] = {}, {}
-
-        # TODO: this is too hidious, should have a getter in the entity class
         for side_name in ["player_1", "player_2"]:
             side = self.arena.player_side_1 if side_name == "player_1" else \
                 self.arena.player_side_2
@@ -193,28 +307,13 @@ class ClashRoyaleEnv(gym.Env):
                 else:
                     tower = side.princess_tower_2
 
-                obs[f"{side_name}_crown_towers"][tower_name] = {
-                    "deploy_cost": tower.deploy_cost,
-                    "deploy_delay": tower.deploy_delay,
+                obs[f"{side_name}_crown_towers"][tower_name] = self._get_entity_obs(tower)
 
-                    "entity_type": tower.entity_type,
-                    "target_types": np.array([
-                        int(EntityType.GROUND   in tower.target_types),
-                        int(EntityType.AIR      in tower.target_types),
-                        int(EntityType.BUILDING in tower.target_types),
-                    ], dtype=np.int8),
-                    
-                    "position": np.array([tower.position.x, tower.position.y]),
-
-                    "health": tower.health,
-                    "hitpoints": tower.hitpoints,
-
-                    "damage": tower.damage,
-                    "attack_radius_cells": tower.attack_radius_cells,
-
-                    "hit_speed": tower.hit_speed,
-                    "first_hit_speed": tower.first_hit_speed
-                }
+        ### Hand and Next Card ###
+        obs["player_1_hand"] = tuple(self._get_card_class_obs(c) for c in self.arena.player_side_1.hand)
+        obs["player_2_hand"] = tuple(self._get_card_class_obs(c) for c in self.arena.player_side_2.hand)
+        obs["player_1_next_card"] = self._get_card_class_obs(self.arena.player_side_1.next_card)
+        obs["player_2_next_card"] = self._get_card_class_obs(self.arena.player_side_2.next_card)
 
         return obs
 
@@ -231,11 +330,11 @@ class ClashRoyaleEnv(gym.Env):
             # Tower kills: count towers whose health dropped to 0
             towers_killed_by_p1 = sum(
                 1 for t_name in ["king_tower", "princess_tower_1", "princess_tower_2"]
-                if float(self._cur_obs["player_2_crown_towers"][t_name]["health"]) <= 0
+                if float(self._cur_obs["player_2_crown_towers"][t_name]["health"][0]) <= 0
             )
             towers_killed_by_p2 = sum(
                 1 for t_name in ["king_tower", "princess_tower_1", "princess_tower_2"]
-                if float(self._cur_obs["player_1_crown_towers"][t_name]["health"]) <= 0
+                if float(self._cur_obs["player_1_crown_towers"][t_name]["health"][0]) <= 0
             )
 
             winner = self.arena.winner  # 1, 2, or None (draw / truncated)
@@ -244,8 +343,8 @@ class ClashRoyaleEnv(gym.Env):
                 and winner is not None
                 and self.arena.has_sudden_death_started
                 and not (  # king tower still alive → princess-tower kill in SD
-                    float(self._cur_obs["player_1_crown_towers"]["king_tower"]["health"]) <= 0
-                    or float(self._cur_obs["player_2_crown_towers"]["king_tower"]["health"]) <= 0
+                    float(self._cur_obs["player_1_crown_towers"]["king_tower"]["health"][0]) <= 0
+                    or float(self._cur_obs["player_2_crown_towers"]["king_tower"]["health"][0]) <= 0
                 )
             )
 
@@ -308,18 +407,13 @@ class ClashRoyaleEnv(gym.Env):
 
             x, y = action[f"player_{idx}_card_position"]
             
-            # TODO: use entity registers instead
-            card = None
-            if action[f"player_{idx}_card_idx"] == 0:
-                card = Knight
-            elif action[f"player_{idx}_card_idx"] == 1:
-                card = Giant
-            elif action[f"player_{idx}_card_idx"] == 2:
-                card = MiniPEKKA
-
-            card_instance = card(owner, y, x)
-            if self.arena.deploy_entity(card_instance):
-                owner.add_object(card_instance)
+            card_idx = action[f"player_{idx}_card_idx"]
+            if 0 <= card_idx < len(owner.hand):
+                card = owner.hand[card_idx]
+                card_instance = card(owner, y, x)
+                if self.arena.deploy_entity(card_instance):
+                    owner.add_object(card_instance)
+                    owner.use_card(card_idx)
 
         prev_obs = self._cur_obs  # Saving for reward calculation
         
@@ -374,8 +468,8 @@ class ClashRoyaleEnv(gym.Env):
             prev_dict = prev_obs[f"player_{idx}_crown_towers"]
 
             for tower_str in cur_dict.keys():
-                cur_health  = float(cur_dict[tower_str]["health"])
-                prev_health = float(prev_dict[tower_str]["health"])
+                cur_health  = float(cur_dict[tower_str]["health"][0])
+                prev_health = float(prev_dict[tower_str]["health"][0])
                 delta = cur_health - prev_health  # negative when damage dealt
 
                 # HP delta (shaping)

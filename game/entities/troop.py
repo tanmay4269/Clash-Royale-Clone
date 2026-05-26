@@ -116,7 +116,7 @@ class Troop(Entity):
         # if False:
         if True:
             # Attack radius
-            pygame.draw.circle(screen, "black", self.position, self.attack_radius_cells, width=1)
+            # pygame.draw.circle(screen, "black", self.position, self.attack_radius_cells, width=1)
             
             # Visibility radius
             # pygame.draw.circle(screen, "brown", self.position, self.visibility_cells, width=1)

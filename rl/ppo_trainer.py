@@ -158,6 +158,7 @@ class Trainer:
         self.cfg.network.position_space_height = self.arena.height
 
         self.cfg.network.invalid_position_mask = t.tensor(invalid_position_mask).flatten()
+        self.cfg.network.deploy_cost_idx = self.env.flattened_card_space_indices["deploy_cost"][0]
 
         # Buffer Related
         self.cfg.buffer.gae_gamma = gae_gamma
@@ -295,8 +296,8 @@ class Trainer:
         else:
             global_step = 0
 
-        # next_video = (global_step // self.video_every_k_global_steps + 1) * self.video_every_k_global_steps
         next_video = 0
+        # next_video = (global_step // self.video_every_k_global_steps + 1) * self.video_every_k_global_steps
         next_save_state = (global_step // self.save_state_every + 1) * self.save_state_every
 
         initial_net = deepcopy(net_1)
@@ -493,7 +494,7 @@ class Trainer:
             # --- Drop / log forced-skip steps ---
             if self.cfg.drop_forced_skips:
                 n_before, n_dropped = buffer.drop_forced_skips(
-                    net_1.deck_deploy_costs, net_1.max_elixirs
+                    net_1.max_elixirs, net_1.deploy_cost_idx
                 )
                 if self.debug:
                     n_after = n_before - n_dropped
@@ -503,7 +504,7 @@ class Trainer:
                         f"({n_dropped / max(n_before, 1):.1%}) → {n_after} kept"
                     )
             elif self.debug:
-                mask = buffer.forced_skip_mask(net_1.deck_deploy_costs, net_1.max_elixirs)
+                mask = buffer.forced_skip_mask(net_1.max_elixirs, net_1.deploy_cost_idx)
                 n = buffer.ptr
                 n_forced = int(mask.sum().item())
                 print(
@@ -1052,6 +1053,8 @@ class Trainer:
             "opponent_cards":           player_2_cards,
             "my_crown_towers":          player_1_crown_towers,
             "opponent_crown_towers":    player_2_crown_towers,
+            "my_hand":                  t.tensor(np.array(obs["player_1_hand"], dtype=np.float32)).unsqueeze(0),
+            "my_next_card":             t.tensor(np.array(obs["player_1_next_card"], dtype=np.float32)).unsqueeze(0),
         }
 
         obs_2 = {
@@ -1061,6 +1064,8 @@ class Trainer:
             "opponent_cards":           rotate_entities_180(player_1_cards),
             "my_crown_towers":          rotate_entities_180(player_2_crown_towers),
             "opponent_crown_towers":    rotate_entities_180(player_1_crown_towers),
+            "my_hand":                  t.tensor(np.array(obs["player_2_hand"], dtype=np.float32)).unsqueeze(0),
+            "my_next_card":             t.tensor(np.array(obs["player_2_next_card"], dtype=np.float32)).unsqueeze(0),
         }
 
         return obs_1, obs_2
