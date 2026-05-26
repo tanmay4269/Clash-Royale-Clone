@@ -7,7 +7,7 @@ Player 2: AI bot driven by BotNet (overfit modes: random / skip / scripted) or t
 Controls
 --------
 1 / 2       : switch active player (human deploy side)
-K / G / P   : pick active card  (Knight / Giant / MiniPEKKA)
+K / G / P / M : pick active card  (Knight / Giant / MiniPEKKA / Musketeer)
 R / S / C   : change bot mode   (Random / Skip / Scripted)
 Left-click  : deploy active card at mouse position
 
@@ -42,6 +42,7 @@ from rl.env.cr_flatten_norm_wrapper import CRFlattenNormWrapper
 from game.entities.troops.knight     import Knight
 from game.entities.troops.giant      import Giant
 from game.entities.troops.mini_pekka import MiniPEKKA
+from game.entities.troops.musketeer  import Musketeer
 
 
 def split_observations(obs, env, arena, max_num_objects):
@@ -250,7 +251,7 @@ class Game:
         return (
             "\n=== Clash Royale Manual Test ===\n"
             "  1 / 2        -> switch deploy side (player 1 / 2)\n"
-            "  K / G / P    -> set card  (Knight / Giant / MiniPEKKA)\n"
+            "  K / G / P / M -> set card  (Knight / Giant / MiniPEKKA / Musketeer)\n"
             "  R / S / C    -> bot mode  (Random / Skip / Scripted)\n"
             "  Left-click   -> deploy card\n"
             "================================\n"
@@ -354,6 +355,9 @@ class Game:
                 elif event.key == pygame.K_p:
                     self.arena._debug_active_card = MiniPEKKA
                     print("Active card -> MiniPEKKA")
+                elif event.key == pygame.K_m:
+                    self.arena._debug_active_card = Musketeer
+                    print("Active card -> Musketeer")
 
         self.arena.render(self.screen)
 
@@ -387,8 +391,8 @@ class Game:
             return
 
         pygame.display.flip()
-        # self.dt = self.clock.tick(60) / 1000
-        self.dt = 1/30
+        self.dt = self.clock.tick(60) * 2 / 1000
+        # self.dt = 1/30
 
         ### * DEBUG * ###
         if False:
