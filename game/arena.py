@@ -12,8 +12,10 @@ from game.entities.troops.knight import Knight
 from game.entities.troops.giant import Giant
 from game.entities.troops.mini_pekka import MiniPEKKA
 
-# Toggle flag for pathfinding optimizations
+# Toggle flags for optimizations
 OPTIMIZE_PATHFINDING = True
+OPTIMIZE_COLLISION_LISTS = os.environ.get("OPTIMIZE_COLLISION_LISTS", "0") == "1"
+OPTIMIZE_COLLISION_SPATIAL = os.environ.get("OPTIMIZE_COLLISION_SPATIAL", "0") == "1"
 
 
 class Arena:
@@ -64,6 +66,14 @@ class Arena:
         self.cached_free_cells_ground = None
         self.cached_free_cells_air = None
         self.grid_dirty = True
+
+        # Auxiliary lists for optimized collision check loops
+        self.troops = []
+        self.buildings = []
+        
+        # Spatial partitioning grids
+        self.spatial_grid_troops = None
+        self.spatial_grid_buildings = None
 
         # Deploying crown towers: use list concat to preserve deterministic order
         towers = list(self.player_side_1.get_objects()) + list(self.player_side_2.get_objects())
@@ -451,19 +461,36 @@ class Arena:
 
         ### Collision Management ###
 
-        # Makes a reasonable simplifying assumption that buildings are rects and troops are circles
-        # TODO: Maybe much later I implement spacial proximity based approach. If things lag, this could be an optimisation
-        # TODO: Put this in another method
-        for i, obj_i in enumerate(self.objects):
-            for j in range(i + 1, len(self.objects)):
-                obj_j = self.objects[j]
+        if OPTIMIZE_COLLISION_SPATIAL:
+            # Rebuild spatial grids
+            if getattr(self, "spatial_grid_troops", None) is None:
+                self.spatial_grid_troops = SpatialGrid(self.width * self.tile_size, self.height * self.tile_size, cell_size=64)
+                self.spatial_grid_buildings = SpatialGrid(self.width * self.tile_size, self.height * self.tile_size, cell_size=64)
+            
+            self.spatial_grid_troops.clear()
+            self.spatial_grid_buildings.clear()
+            
+            for obj in self.objects:
+                if isinstance(obj, Troop):
+                    self.spatial_grid_troops.insert(obj)
+                elif isinstance(obj, Building):
+                    self.spatial_grid_buildings.insert(obj)
 
-                # Troop-Troop Collision
-                if isinstance(obj_i, Troop) and isinstance(obj_j, Troop):
-                    dx = obj_i.position.x - obj_j.position.x
-                    dy = obj_i.position.y - obj_j.position.y
+            # Troop-Troop Collision using Spatial Grid
+            checked_pairs = set()
+            for troop in self.troops:
+                # Query nearby troops
+                nearby_troops = self.spatial_grid_troops.get_nearby(troop, radius_px=24.0)
+                for other in nearby_troops:
+                    pair = (id(troop), id(other)) if id(troop) < id(other) else (id(other), id(troop))
+                    if pair in checked_pairs:
+                        continue
+                    checked_pairs.add(pair)
+                    
+                    dx = troop.position.x - other.position.x
+                    dy = troop.position.y - other.position.y
                     dist_sq = dx**2 + dy**2
-                    rad_sum = obj_i.size + obj_j.size
+                    rad_sum = troop.size + other.size
                     
                     if dist_sq >= rad_sum**2:
                         continue
@@ -476,15 +503,18 @@ class Arena:
                     fx = (dx / dist) * overlap * Troop.COLLISION_COEF
                     fy = (dy / dist) * overlap * Troop.COLLISION_COEF
                     
-                    obj_i.apply_force(Vector2(fx, fy))
-                    obj_j.apply_force(Vector2(-fx, -fy))
+                    troop.apply_force_xy(fx, fy)
+                    other.apply_force_xy(-fx, -fy)
 
-                # Building-Troop Collision
-                elif isinstance(obj_i, Building) and isinstance(obj_j, Troop):
-                    dx = obj_i.position.x - obj_j.position.x
-                    dy = obj_i.position.y - obj_j.position.y
-                    ox = (obj_i.size.x / 2 + obj_j.size) - abs(dx)
-                    oy = (obj_i.size.y / 2 + obj_j.size) - abs(dy)
+            # Troop-Building Collision using Spatial Grid
+            for troop in self.troops:
+                # Query nearby buildings
+                nearby_buildings = self.spatial_grid_buildings.get_nearby(troop, radius_px=40.0)
+                for building in nearby_buildings:
+                    dx = building.position.x - troop.position.x
+                    dy = building.position.y - troop.position.y
+                    ox = (building.size.x / 2 + troop.size) - abs(dx)
+                    oy = (building.size.y / 2 + troop.size) - abs(dy)
                     
                     if ox < 0 or oy < 0:
                         continue
@@ -496,14 +526,40 @@ class Arena:
                     overlap_len = (ox**2 + oy**2)**0.5
                     fx = -(dx / dist) * overlap_len * Troop.COLLISION_COEF
                     fy = -(dy / dist) * overlap_len * Troop.COLLISION_COEF
-                    obj_j.apply_force(Vector2(fx, fy))
+                    troop.apply_force_xy(fx, fy)
+
+        elif OPTIMIZE_COLLISION_LISTS:
+            # Separated lists collision checks (avoids isinstance checks and N^2 loop over all objects)
+            for i, troop_i in enumerate(self.troops):
+                # Troop-Troop collisions
+                for j in range(i + 1, len(self.troops)):
+                    troop_j = self.troops[j]
+                    dx = troop_i.position.x - troop_j.position.x
+                    dy = troop_i.position.y - troop_j.position.y
+                    dist_sq = dx**2 + dy**2
+                    rad_sum = troop_i.size + troop_j.size
                     
-                # Troop-Building Collision (swapped)
-                elif isinstance(obj_i, Troop) and isinstance(obj_j, Building):
-                    dx = obj_j.position.x - obj_i.position.x
-                    dy = obj_j.position.y - obj_i.position.y
-                    ox = (obj_j.size.x / 2 + obj_i.size) - abs(dx)
-                    oy = (obj_j.size.y / 2 + obj_i.size) - abs(dy)
+                    if dist_sq >= rad_sum**2:
+                        continue
+                        
+                    dist = dist_sq**0.5
+                    overlap = rad_sum - dist
+                    if dist_sq < 1e-6:
+                        dx, dy, dist = 0.1, 0.1, 0.1414
+                        
+                    fx = (dx / dist) * overlap * Troop.COLLISION_COEF
+                    fy = (dy / dist) * overlap * Troop.COLLISION_COEF
+                    
+                    troop_i.apply_force_xy(fx, fy)
+                    troop_j.apply_force_xy(-fx, -fy)
+
+            # Troop-Building collisions
+            for troop in self.troops:
+                for building in self.buildings:
+                    dx = building.position.x - troop.position.x
+                    dy = building.position.y - troop.position.y
+                    ox = (building.size.x / 2 + troop.size) - abs(dx)
+                    oy = (building.size.y / 2 + troop.size) - abs(dy)
                     
                     if ox < 0 or oy < 0:
                         continue
@@ -515,7 +571,72 @@ class Arena:
                     overlap_len = (ox**2 + oy**2)**0.5
                     fx = -(dx / dist) * overlap_len * Troop.COLLISION_COEF
                     fy = -(dy / dist) * overlap_len * Troop.COLLISION_COEF
-                    obj_i.apply_force(Vector2(fx, fy))
+                    troop.apply_force_xy(fx, fy)
+
+        else:
+            # Fall back to original N^2 nested loop
+            for i, obj_i in enumerate(self.objects):
+                for j in range(i + 1, len(self.objects)):
+                    obj_j = self.objects[j]
+
+                    # Troop-Troop Collision
+                    if isinstance(obj_i, Troop) and isinstance(obj_j, Troop):
+                        dx = obj_i.position.x - obj_j.position.x
+                        dy = obj_i.position.y - obj_j.position.y
+                        dist_sq = dx**2 + dy**2
+                        rad_sum = obj_i.size + obj_j.size
+                        
+                        if dist_sq >= rad_sum**2:
+                            continue
+                            
+                        dist = dist_sq**0.5
+                        overlap = rad_sum - dist
+                        if dist_sq < 1e-6:
+                            dx, dy, dist = 0.1, 0.1, 0.1414
+                            
+                        fx = (dx / dist) * overlap * Troop.COLLISION_COEF
+                        fy = (dy / dist) * overlap * Troop.COLLISION_COEF
+                        
+                        obj_i.apply_force(Vector2(fx, fy))
+                        obj_j.apply_force(Vector2(-fx, -fy))
+
+                    # Building-Troop Collision
+                    elif isinstance(obj_i, Building) and isinstance(obj_j, Troop):
+                        dx = obj_i.position.x - obj_j.position.x
+                        dy = obj_i.position.y - obj_j.position.y
+                        ox = (obj_i.size.x / 2 + obj_j.size) - abs(dx)
+                        oy = (obj_i.size.y / 2 + obj_j.size) - abs(dy)
+                        
+                        if ox < 0 or oy < 0:
+                            continue
+                            
+                        dist_sq = dx**2 + dy**2
+                        dist = dist_sq**0.5 if dist_sq >= 1e-6 else 0.1414
+                        dx, dy = (dx, dy) if dist_sq >= 1e-6 else (0.1, 0.1)
+                            
+                        overlap_len = (ox**2 + oy**2)**0.5
+                        fx = -(dx / dist) * overlap_len * Troop.COLLISION_COEF
+                        fy = -(dy / dist) * overlap_len * Troop.COLLISION_COEF
+                        obj_j.apply_force(Vector2(fx, fy))
+                        
+                    # Troop-Building Collision (swapped)
+                    elif isinstance(obj_i, Troop) and isinstance(obj_j, Building):
+                        dx = obj_j.position.x - obj_i.position.x
+                        dy = obj_j.position.y - obj_i.position.y
+                        ox = (obj_j.size.x / 2 + obj_i.size) - abs(dx)
+                        oy = (obj_j.size.y / 2 + obj_i.size) - abs(dy)
+                        
+                        if ox < 0 or oy < 0:
+                            continue
+                            
+                        dist_sq = dx**2 + dy**2
+                        dist = dist_sq**0.5 if dist_sq >= 1e-6 else 0.1414
+                        dx, dy = (dx, dy) if dist_sq >= 1e-6 else (0.1, 0.1)
+                            
+                        overlap_len = (ox**2 + oy**2)**0.5
+                        fx = -(dx / dist) * overlap_len * Troop.COLLISION_COEF
+                        fy = -(dy / dist) * overlap_len * Troop.COLLISION_COEF
+                        obj_i.apply_force(Vector2(fx, fy))
 
 
         ### Deploy Buffer Management ###
@@ -527,7 +648,10 @@ class Arena:
                 obj.arena = self
                 self.objects.append(obj)
                 # ! ADD TO PLAYER OBJECTS TOO
-                if isinstance(obj, Building):
+                if isinstance(obj, Troop):
+                    self.troops.append(obj)
+                elif isinstance(obj, Building):
+                    self.buildings.append(obj)
                     self.grid_dirty = True
             else:
                 print("(WARN: Arena::update) Buffer Management: Can't deploy since max num objects has been reached")
@@ -562,6 +686,8 @@ class Arena:
                     # Still clear the footprint before returning
                     mask, mask_pos = obj.get_cell_occupancy()
                     self.occupy_cells(np.zeros_like(mask), mask_pos)
+                    if obj in self.buildings:
+                        self.buildings.remove(obj)
                     self.objects.remove(obj)
                     self.grid_dirty = True
                     return True, False
@@ -571,6 +697,8 @@ class Arena:
                     self.winner = 1
                     mask, mask_pos = obj.get_cell_occupancy()
                     self.occupy_cells(np.zeros_like(mask), mask_pos)
+                    if obj in self.buildings:
+                        self.buildings.remove(obj)
                     self.objects.remove(obj)
                     self.grid_dirty = True
                     return True, False
@@ -583,6 +711,10 @@ class Arena:
                 self.occupy_cells(clear_mask, mask_pos)
                 self.grid_dirty = True
 
+            if obj in self.troops:
+                self.troops.remove(obj)
+            elif obj in self.buildings:
+                self.buildings.remove(obj)
             self.objects.remove(obj)
             # del obj
 
@@ -759,3 +891,55 @@ class Arena:
         self.cached_free_cells_ground = np.argwhere(self.cached_tiled_grid_ground == 0)
         
         self.grid_dirty = False
+
+
+class SpatialGrid:
+    def __init__(self, width_px, height_px, cell_size=64):
+        self.cell_size = cell_size
+        self.cols = int(np.ceil(width_px / cell_size))
+        self.rows = int(np.ceil(height_px / cell_size))
+        self.grid = [[[] for _ in range(self.cols)] for _ in range(self.rows)]
+
+    def clear(self):
+        for r in range(self.rows):
+            for c in range(self.cols):
+                self.grid[r][c].clear()
+
+    def insert(self, obj):
+        pos = obj.position
+        if hasattr(obj, 'size') and isinstance(obj.size, Vector2):
+            # Building (rect)
+            half_w = obj.size.x / 2
+            half_h = obj.size.y / 2
+            c_min = max(0, int((pos.x - half_w) // self.cell_size))
+            c_max = min(self.cols - 1, int((pos.x + half_w) // self.cell_size))
+            r_min = max(0, int((pos.y - half_h) // self.cell_size))
+            r_max = min(self.rows - 1, int((pos.y + half_h) // self.cell_size))
+            for r in range(r_min, r_max + 1):
+                for c in range(c_min, c_max + 1):
+                    self.grid[r][c].append(obj)
+        else:
+            # Troop (circle)
+            rad = getattr(obj, 'radius', 0.0) * 16
+            c_min = max(0, int((pos.x - rad) // self.cell_size))
+            c_max = min(self.cols - 1, int((pos.x + rad) // self.cell_size))
+            r_min = max(0, int((pos.y - rad) // self.cell_size))
+            r_max = min(self.rows - 1, int((pos.y + rad) // self.cell_size))
+            for r in range(r_min, r_max + 1):
+                for c in range(c_min, c_max + 1):
+                    self.grid[r][c].append(obj)
+
+    def get_nearby(self, obj, radius_px):
+        pos = obj.position
+        c_min = max(0, int((pos.x - radius_px) // self.cell_size))
+        c_max = min(self.cols - 1, int((pos.x + radius_px) // self.cell_size))
+        r_min = max(0, int((pos.y - radius_px) // self.cell_size))
+        r_max = min(self.rows - 1, int((pos.y + radius_px) // self.cell_size))
+        
+        nearby = []
+        for r in range(r_min, r_max + 1):
+            for c in range(c_min, c_max + 1):
+                for other in self.grid[r][c]:
+                    if other is not obj and other not in nearby:
+                        nearby.append(other)
+        return nearby

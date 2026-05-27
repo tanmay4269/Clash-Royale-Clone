@@ -297,7 +297,29 @@ class Troop(Entity):
 
         # --- Scan for a closer non-tower target (troops / buildings) in range ---
         closest_obj, closest_dist = None, float('inf')
-        for obj in opponent.objects:
+        
+        # Check if spatial partitioning optimization is active
+        use_spatial = False
+        if hasattr(self, "arena") and self.arena is not None:
+            use_spatial = getattr(self.arena, "OPTIMIZE_COLLISION_SPATIAL", False)
+
+        if use_spatial:
+            nearby_opponents = []
+            if hasattr(self.arena, "spatial_grid_troops") and self.arena.spatial_grid_troops is not None:
+                nearby_opponents.extend([
+                    t for t in self.arena.spatial_grid_troops.get_nearby(self, self.visibility_cells)
+                    if t.owner == opponent
+                ])
+            if hasattr(self.arena, "spatial_grid_buildings") and self.arena.spatial_grid_buildings is not None:
+                nearby_opponents.extend([
+                    b for b in self.arena.spatial_grid_buildings.get_nearby(self, self.visibility_cells)
+                    if b.owner == opponent
+                ])
+            objs_to_scan = nearby_opponents
+        else:
+            objs_to_scan = opponent.objects
+
+        for obj in objs_to_scan:
             if not obj.has_deployed():
                 continue
             if not obj.is_targetable:
@@ -516,6 +538,11 @@ class Troop(Entity):
 
         # Hacky -- Doesn't look great
         # self.position += force.normalize() * 0.5
+
+
+    def apply_force_xy(self, fx: float, fy: float) -> None:
+        self.acceleration.x += fx / self.mass
+        self.acceleration.y += fy / self.mass
 
 
     ########################
