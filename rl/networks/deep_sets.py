@@ -1,3 +1,5 @@
+import numpy as np
+
 import torch as t
 import torch.nn as nn
 
@@ -16,6 +18,7 @@ class DeepSetsActorCritic(BaseActorCritic):
         trunk_extra_in_ch,
         trunk_mid_ch,
 
+        # activation_fn='relu',
         activation_fn='tanh',
         
         # disjoint_actor_critic=False,
@@ -24,6 +27,7 @@ class DeepSetsActorCritic(BaseActorCritic):
         # use_cnn_position_decoder=False,
         use_cnn_position_decoder=True,
         
+        # use_last_layer_norms=False,
         use_last_layer_norms=True,
         
         # append_deck_info_to_position_head_input=False,
@@ -36,6 +40,7 @@ class DeepSetsActorCritic(BaseActorCritic):
         self.entity_encoder_out_ch = entity_encoder_out_ch
         self.trunk_mid_ch = trunk_mid_ch
         self.disjoint_actor_critic = disjoint_actor_critic
+        self.use_last_layer_norms = use_last_layer_norms
         self.append_deck_info_to_position_head_input = append_deck_info_to_position_head_input
 
         activation_layer = self.get_activation(activation_fn)
@@ -51,8 +56,8 @@ class DeepSetsActorCritic(BaseActorCritic):
                 activation_layer(),
 
                 self.layer_init(nn.Linear(entity_encoder_mid_ch, entity_encoder_out_ch)),
-                nn.LayerNorm(entity_encoder_out_ch),
-                activation_layer(),
+                # nn.LayerNorm(entity_encoder_out_ch),
+                # activation_layer(),
             )
 
         def make_trunk():
@@ -85,6 +90,12 @@ class DeepSetsActorCritic(BaseActorCritic):
             self.position_space_width, self.position_space_height,
             activation_layer,
         )
+
+    def layer_init(self, layer, std=np.sqrt(2), bias_const=0.0):
+        if not self.use_last_layer_norms:
+            return layer
+
+        return super().layer_init(layer, std=std, bias_const=bias_const)
 
     def get_trunk_input(self, obs, all_embeddings, encoder):
         my_card_embeddings       = all_embeddings[:, 0 : self.max_num_cards]

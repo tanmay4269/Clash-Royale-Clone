@@ -56,7 +56,7 @@ class BaseActorCritic(nn.Module):
             activation_layer(),
             self.layer_init(nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1)),
             activation_layer(),
-            self.layer_init(nn.ConvTranspose2d(16, 1, kernel_size=(4, 8), stride=(2, 1), padding=(1, 0)), std=0.01),
+            self.layer_init(nn.ConvTranspose2d(16, 1, kernel_size=(4, 7), stride=(2, 1), padding=(1, 0)), std=0.01),
             nn.Flatten(),
         )
 
