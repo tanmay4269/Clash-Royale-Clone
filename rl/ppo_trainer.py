@@ -308,8 +308,8 @@ class Trainer:
             loaded_checkpoint_indices = [None] * N
             opponent_elos = [self.cfg.elo.initial_rating] * N
 
-        next_video = 0
-        # next_video = (global_step // self.video_every_k_global_steps + 1) * self.video_every_k_global_steps
+        # next_video = 0
+        next_video = (global_step // self.video_every_k_global_steps + 1) * self.video_every_k_global_steps
         next_save_state = (global_step // self.save_state_every + 1) * self.save_state_every
 
         net_1_cpu = make_network(self.cfg.network_type, **self.cfg.network.to_dict()).to("cpu")
