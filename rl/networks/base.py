@@ -27,6 +27,20 @@ class BaseActorCritic(nn.Module):
         self.max_elixirs = max_elixirs
         self.deploy_cost_idx = deploy_cost_idx
 
+    def load_state_dict(self, state_dict, strict=True, *args, **kwargs):
+        # Create a shallow copy to avoid mutating the original dict in-place
+        state_dict = dict(state_dict)
+        
+        has_local_mask = "invalid_position_mask" in self.state_dict()
+        has_loaded_mask = "invalid_position_mask" in state_dict
+        
+        if has_local_mask and not has_loaded_mask:
+            state_dict["invalid_position_mask"] = self.invalid_position_mask
+        elif not has_local_mask and has_loaded_mask:
+            del state_dict["invalid_position_mask"]
+            
+        return super().load_state_dict(state_dict, strict=strict, *args, **kwargs)
+
     @staticmethod
     def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
         nn.init.orthogonal_(layer.weight, std)
