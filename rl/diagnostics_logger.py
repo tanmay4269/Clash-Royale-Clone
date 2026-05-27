@@ -200,44 +200,81 @@ class DiagnosticsLogger:
             states_tensor = batch[0]
             device = next(net_curr.parameters()).device
             states_tensor = {k: v.to(device) for k, v in states_tensor.items()}
-            
-            _, skip_log_curr, deck_log_curr, pos_log_curr = net_curr(states_tensor)
-            _, skip_log_init, deck_log_init, pos_log_init = net_init(states_tensor)
-            _, skip_log_prev, deck_log_prev, pos_log_prev = net_prev(states_tensor)
 
-            # Distributions
-            skip_dist_curr = t.distributions.Bernoulli(logits=skip_log_curr)
-            deck_dist_curr = t.distributions.Categorical(logits=deck_log_curr)
-            pos_dist_curr = t.distributions.Categorical(logits=pos_log_curr)
+            fwd_curr = net_curr(states_tensor)
+            fwd_init = net_init(states_tensor)
+            fwd_prev = net_prev(states_tensor)
 
-            skip_dist_init = t.distributions.Bernoulli(logits=skip_log_init)
-            deck_dist_init = t.distributions.Categorical(logits=deck_log_init)
-            pos_dist_init = t.distributions.Categorical(logits=pos_log_init)
+            is_pointer = len(fwd_curr) == 3  # Pointer: (value, card_logits, pos_logits)
 
-            skip_dist_prev = t.distributions.Bernoulli(logits=skip_log_prev)
-            deck_dist_prev = t.distributions.Categorical(logits=deck_log_prev)
-            pos_dist_prev = t.distributions.Categorical(logits=pos_log_prev)
+            if is_pointer:
+                # Unified 5-way card distribution (skip token is slot 4)
+                _, card_log_curr, pos_log_curr = fwd_curr
+                _, card_log_init, pos_log_init = fwd_init
+                _, card_log_prev, pos_log_prev = fwd_prev
 
-            ent_skip = skip_dist_curr.entropy().mean().item()
-            ent_deck = deck_dist_curr.entropy().mean().item()
-            ent_pos = pos_dist_curr.entropy().mean().item()
+                card_dist_curr = t.distributions.Categorical(logits=card_log_curr)
+                card_dist_init = t.distributions.Categorical(logits=card_log_init)
+                card_dist_prev = t.distributions.Categorical(logits=card_log_prev)
+                pos_dist_curr  = t.distributions.Categorical(logits=pos_log_curr)
+                pos_dist_init  = t.distributions.Categorical(logits=pos_log_init)
+                pos_dist_prev  = t.distributions.Categorical(logits=pos_log_prev)
 
-            kl_skip_init = t.distributions.kl.kl_divergence(skip_dist_curr, skip_dist_init).mean().item()
-            kl_deck_init = t.distributions.kl.kl_divergence(deck_dist_curr, deck_dist_init).mean().item()
-            kl_pos_init = t.distributions.kl.kl_divergence(pos_dist_curr, pos_dist_init).mean().item()
+                ent_card = card_dist_curr.entropy().mean().item()
+                ent_pos  = pos_dist_curr.entropy().mean().item()
 
-            kl_skip_prev = t.distributions.kl.kl_divergence(skip_dist_curr, skip_dist_prev).mean().item()
-            kl_deck_prev = t.distributions.kl.kl_divergence(deck_dist_curr, deck_dist_prev).mean().item()
-            kl_pos_prev = t.distributions.kl.kl_divergence(pos_dist_curr, pos_dist_prev).mean().item()
+                kl_card_init = t.distributions.kl.kl_divergence(card_dist_curr, card_dist_init).mean().item()
+                kl_pos_init  = t.distributions.kl.kl_divergence(pos_dist_curr,  pos_dist_init).mean().item()
+                kl_card_prev = t.distributions.kl.kl_divergence(card_dist_curr, card_dist_prev).mean().item()
+                kl_pos_prev  = t.distributions.kl.kl_divergence(pos_dist_curr,  pos_dist_prev).mean().item()
 
-        wandb.log({
-            "per_head_diagnostics/entropy/skip": ent_skip,
-            "per_head_diagnostics/entropy/deck_idx": ent_deck,
-            "per_head_diagnostics/entropy/position": ent_pos,
-            "per_head_diagnostics/kl_vs_initial/skip": kl_skip_init,
-            "per_head_diagnostics/kl_vs_initial/deck_idx": kl_deck_init,
-            "per_head_diagnostics/kl_vs_initial/position": kl_pos_init,
-            "per_head_diagnostics/kl_vs_pre_update/skip": kl_skip_prev,
-            "per_head_diagnostics/kl_vs_pre_update/deck_idx": kl_deck_prev,
-            "per_head_diagnostics/kl_vs_pre_update/position": kl_pos_prev,
-        }, step=global_step)
+                wandb.log({
+                    "per_head_diagnostics/entropy/card":             ent_card,
+                    "per_head_diagnostics/entropy/position":         ent_pos,
+                    "per_head_diagnostics/kl_vs_initial/card":       kl_card_init,
+                    "per_head_diagnostics/kl_vs_initial/position":   kl_pos_init,
+                    "per_head_diagnostics/kl_vs_pre_update/card":    kl_card_prev,
+                    "per_head_diagnostics/kl_vs_pre_update/position": kl_pos_prev,
+                }, step=global_step)
+
+            else:
+                # DeepSets: separate Bernoulli skip + Categorical deck heads
+                _, skip_log_curr, deck_log_curr, pos_log_curr = fwd_curr
+                _, skip_log_init, deck_log_init, pos_log_init = fwd_init
+                _, skip_log_prev, deck_log_prev, pos_log_prev = fwd_prev
+
+                skip_dist_curr = t.distributions.Bernoulli(logits=skip_log_curr)
+                deck_dist_curr = t.distributions.Categorical(logits=deck_log_curr)
+                pos_dist_curr  = t.distributions.Categorical(logits=pos_log_curr)
+
+                skip_dist_init = t.distributions.Bernoulli(logits=skip_log_init)
+                deck_dist_init = t.distributions.Categorical(logits=deck_log_init)
+                pos_dist_init  = t.distributions.Categorical(logits=pos_log_init)
+
+                skip_dist_prev = t.distributions.Bernoulli(logits=skip_log_prev)
+                deck_dist_prev = t.distributions.Categorical(logits=deck_log_prev)
+                pos_dist_prev  = t.distributions.Categorical(logits=pos_log_prev)
+
+                ent_skip = skip_dist_curr.entropy().mean().item()
+                ent_deck = deck_dist_curr.entropy().mean().item()
+                ent_pos  = pos_dist_curr.entropy().mean().item()
+
+                kl_skip_init = t.distributions.kl.kl_divergence(skip_dist_curr, skip_dist_init).mean().item()
+                kl_deck_init = t.distributions.kl.kl_divergence(deck_dist_curr, deck_dist_init).mean().item()
+                kl_pos_init  = t.distributions.kl.kl_divergence(pos_dist_curr,  pos_dist_init).mean().item()
+
+                kl_skip_prev = t.distributions.kl.kl_divergence(skip_dist_curr, skip_dist_prev).mean().item()
+                kl_deck_prev = t.distributions.kl.kl_divergence(deck_dist_curr, deck_dist_prev).mean().item()
+                kl_pos_prev  = t.distributions.kl.kl_divergence(pos_dist_curr,  pos_dist_prev).mean().item()
+
+                wandb.log({
+                    "per_head_diagnostics/entropy/skip":              ent_skip,
+                    "per_head_diagnostics/entropy/deck_idx":          ent_deck,
+                    "per_head_diagnostics/entropy/position":          ent_pos,
+                    "per_head_diagnostics/kl_vs_initial/skip":        kl_skip_init,
+                    "per_head_diagnostics/kl_vs_initial/deck_idx":    kl_deck_init,
+                    "per_head_diagnostics/kl_vs_initial/position":    kl_pos_init,
+                    "per_head_diagnostics/kl_vs_pre_update/skip":     kl_skip_prev,
+                    "per_head_diagnostics/kl_vs_pre_update/deck_idx": kl_deck_prev,
+                    "per_head_diagnostics/kl_vs_pre_update/position": kl_pos_prev,
+                }, step=global_step)
