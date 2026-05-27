@@ -198,6 +198,8 @@ class DiagnosticsLogger:
         with t.no_grad():
             batch = next(iter(buffer.get_minibatches(self.cfg.minibatch_size)))
             states_tensor = batch[0]
+            device = next(net_curr.parameters()).device
+            states_tensor = {k: v.to(device) for k, v in states_tensor.items()}
             
             _, skip_log_curr, deck_log_curr, pos_log_curr = net_curr(states_tensor)
             _, skip_log_init, deck_log_init, pos_log_init = net_init(states_tensor)
