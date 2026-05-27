@@ -213,7 +213,7 @@ class HeatmapVisualizerWrapper(gym.Wrapper):
 
             # --- 3. Draw vertical Eval/Win-rate Bar ---
             # win_prob for Player 2 (primary, Blue, bottom)
-            win_prob = 1.0 / (1.0 + np.exp(-dp["value_1"]))
+            win_prob = 1.0 / (1.0 + np.exp(-dp["value_2"]))
             fill_h_red = int(H * (1.0 - win_prob))
             
             # Player 1 is red, Player 2 is blue

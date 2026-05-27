@@ -308,8 +308,8 @@ class Trainer:
             loaded_checkpoint_indices = [None] * N
             opponent_elos = [self.cfg.elo.initial_rating] * N
 
-        # next_video = 0
-        next_video = (global_step // self.video_every_k_global_steps + 1) * self.video_every_k_global_steps
+        next_video = 0
+        # next_video = (global_step // self.video_every_k_global_steps + 1) * self.video_every_k_global_steps
         next_save_state = (global_step // self.save_state_every + 1) * self.save_state_every
 
         net_1_cpu = make_network(self.cfg.network_type, **self.cfg.network.to_dict()).to("cpu")
@@ -922,13 +922,13 @@ class Trainer:
                 state_1, state_2 = self.split_observations(state)
 
                 with t.no_grad():
-                    val_1, skip_logits_1, deck_logits_1, pos_logits_1 = net_1(self._normalize_obs(state_1))
-                    val_2, skip_logits_2, deck_logits_2, pos_logits_2 = net_2(self._normalize_obs(state_2))
+                    val_1, skip_logits_1, deck_logits_1, pos_logits_1 = net_2(self._normalize_obs(state_1))
+                    val_2, skip_logits_2, deck_logits_2, pos_logits_2 = net_1(self._normalize_obs(state_2))
 
-                    if net_1.invalid_position_mask is not None:
-                        pos_logits_1 = pos_logits_1.masked_fill(net_1.invalid_position_mask, float('-inf'))
                     if net_2.invalid_position_mask is not None:
-                        pos_logits_2 = pos_logits_2.masked_fill(net_2.invalid_position_mask, float('-inf'))
+                        pos_logits_1 = pos_logits_1.masked_fill(net_2.invalid_position_mask, float('-inf'))
+                    if net_1.invalid_position_mask is not None:
+                        pos_logits_2 = pos_logits_2.masked_fill(net_1.invalid_position_mask, float('-inf'))
 
                     skip_probs_1 = t.sigmoid(skip_logits_1).squeeze(0).cpu().numpy()
                     deck_probs_1 = F.softmax(deck_logits_1, dim=-1).squeeze(0).cpu().numpy()
