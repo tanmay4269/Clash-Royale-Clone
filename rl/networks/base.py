@@ -20,7 +20,10 @@ class BaseActorCritic(nn.Module):
         self.max_num_cards = max_num_cards
         self.position_space_width = position_space_width
         self.position_space_height = position_space_height
-        self.invalid_position_mask = invalid_position_mask
+        if invalid_position_mask is not None:
+            self.register_buffer("invalid_position_mask", invalid_position_mask)
+        else:
+            self.invalid_position_mask = None
         self.max_elixirs = max_elixirs
         self.deploy_cost_idx = deploy_cost_idx
 
