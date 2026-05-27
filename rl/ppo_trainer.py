@@ -86,6 +86,8 @@ class Trainer:
         self.cfg.seed = 42
         self.set_seed(self.cfg.seed)
 
+        t.set_num_threads(1)
+        t.set_num_interop_threads(1)
         t.set_default_dtype(t.float32)
 
         if t.cuda.is_available():
@@ -94,8 +96,7 @@ class Trainer:
             device = t.device("cpu")
 
         print(f"Using device: {device}")
-
-        t.set_default_device(device)
+        self.device = device
 
         self.debug = debug or bool(os.environ.get("DEBUG_MODE"))
         if self.debug:
@@ -311,6 +312,9 @@ class Trainer:
         next_video = (global_step // self.video_every_k_global_steps + 1) * self.video_every_k_global_steps
         next_save_state = (global_step // self.save_state_every + 1) * self.save_state_every
 
+        net_1_cpu = make_network(self.cfg.network_type, **self.cfg.network.to_dict()).to("cpu")
+        net_1_cpu.load_state_dict(net_1.state_dict())
+
         initial_net = deepcopy(net_1)
         
         if self.overfit_mode in ['vs-random', 'vs-skip', 'vs-scripted']:
@@ -325,7 +329,7 @@ class Trainer:
                 ) for _ in range(N)
             ]
         else:
-            net_2_list = [deepcopy(net_1) for _ in range(N)]
+            net_2_list = [deepcopy(net_1_cpu) for _ in range(N)]
             if not self.overfit_mode:
                 # If resuming or starting, initialize net_2_list by loading appropriate checkpoints
                 for i in range(N):
@@ -333,7 +337,7 @@ class Trainer:
                     if ckpt_idx is not None and ckpt_idx in self.checkpoint_manager.stored_by_idx:
                         elo, filename = self.checkpoint_manager.stored_by_idx[ckpt_idx]
                         checkpoint_path = os.path.join(self.checkpoint_manager.checkpoint_dir, filename)
-                        net_2_list[i].load_state_dict(t.load(checkpoint_path, map_location=None if t.cuda.is_available() else 'cpu', weights_only=True))
+                        net_2_list[i].load_state_dict(t.load(checkpoint_path, map_location='cpu', weights_only=True))
                         opponent_elos[i] = elo
                     else:
                         other_active = {loaded_checkpoint_indices[j] for j in range(N) if j != i and loaded_checkpoint_indices[j] is not None}
@@ -372,6 +376,8 @@ class Trainer:
         max_updates = 2 if self.profile else self.cfg.max_steps  # sentinel reused below
 
         while global_step < self.cfg.max_steps:
+            net_1_cpu.load_state_dict(net_1.state_dict())
+
             # One buffer per env: keeps each env's trajectory contiguous for GAE
             buffers = [RolloutBuffer(**self.cfg.buffer.to_dict()) for _ in range(N)]
 
@@ -387,7 +393,7 @@ class Trainer:
                 steps_before = steps_collected
 
                 if global_step >= next_video:
-                    self.record_episode(global_step, net_1, net_2_list[0])
+                    self.record_episode(global_step, net_1_cpu, net_2_list[0])
                     next_video += self.video_every_k_global_steps
 
                 # --- Get actions for all envs ---
@@ -397,10 +403,19 @@ class Trainer:
                     values_2 = [None] * N
                     actions_1 = [None] * N
 
+                    # Batch active agent (player 2) observations and run once on CPU
+                    obs_2_list = [self._normalize_obs(states_2[i]) for i in range(N)]
+                    batched_obs_2 = self._batch_observations(obs_2_list)
+                    batched_actions_2, batched_log_probs_2, _, batched_values_2 = net_1_cpu.get_action_and_value(batched_obs_2)
+
+                    # Unbatch
+                    actions_2 = self._unbatch_actions(batched_actions_2, N)
+                    log_probs_2 = [batched_log_probs_2[i] for i in range(N)]
+                    values_2 = [batched_values_2[i] for i in range(N)]
+
+                    # Run opponent bots / policies sequentially on CPU
                     for i in range(N):
                         obs_1 = self._normalize_obs(states_1[i])
-                        obs_2 = self._normalize_obs(states_2[i])
-                        actions_2[i], log_probs_2[i], _, values_2[i] = net_1.get_action_and_value(obs_2)
                         actions_1[i], _, _, _ = net_2_list[i].get_action_and_value(obs_1)
 
                 # --- Build joined actions ---
@@ -505,7 +520,7 @@ class Trainer:
             with t.no_grad():
                 for i in range(N):
                     if buffers[i].ptr > 0:
-                        _, _, _, last_val = net_1.get_action_and_value(self._normalize_obs(states_1[i]))
+                        _, _, _, last_val = net_1_cpu.get_action_and_value(self._normalize_obs(states_1[i]))
                         buffers[i].compute_gae(last_val, last_done[i])
             _gae_time = (time.perf_counter() - _gae_t0) if _is_profile_update else None
 
@@ -741,7 +756,14 @@ class Trainer:
 
 
     def on_batch_update(self, net, optimiser, batch, optimize=False, scheduler=None):
+        device = next(net.parameters()).device
         states, actions, old_log_probs, advantages, returns = batch
+
+        states = {k: v.to(device) for k, v in states.items()}
+        actions = {k: v.to(device) for k, v in actions.items()}
+        old_log_probs = old_log_probs.to(device)
+        advantages = advantages.to(device)
+        returns = returns.to(device)
 
         _, new_log_probs, entropies, values = net.get_action_and_value(states, actions)
         ratio = (new_log_probs - old_log_probs).exp()
@@ -1017,7 +1039,7 @@ class Trainer:
         state = t.load(
             path, 
             weights_only=False, 
-            map_location=t.device("cpu") if not t.cuda.is_available() else t.device("cuda")
+            map_location=self.device
         )
         net_1.load_state_dict(state["net_1_state_dict"])
         optimiser_1.load_state_dict(state["optimiser_state"])
@@ -1047,9 +1069,28 @@ class Trainer:
         if weights:
             network.load_state_dict(t.load(weights, weights_only=True))
 
+        network.to(self.device)
         optimiser = optim.Adam(network.parameters(), lr=self.learning_rate)
 
         return network, optimiser
+
+
+    def _batch_observations(self, obs_list):
+        batched = {}
+        for key in obs_list[0].keys():
+            batched[key] = t.cat([obs[key] for obs in obs_list], dim=0)
+        return batched
+
+
+    def _unbatch_actions(self, actions_dict, N):
+        return [
+            {
+                "skip": actions_dict["skip"][i].unsqueeze(0),
+                "deck_idx": actions_dict["deck_idx"][i].unsqueeze(0),
+                "position": actions_dict["position"][i].unsqueeze(0),
+            }
+            for i in range(N)
+        ]
 
 
     def split_observations(self, obs):

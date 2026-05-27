@@ -59,7 +59,7 @@ class AdvancedTemporal_CheckpointManagement:
                 checkpoint_sample = np.random.choice(allowed_indices)
 
         checkpoint_path = os.path.join(self.checkpoint_dir, f"checkpoint_{checkpoint_sample}.pt")
-        net.load_state_dict(t.load(checkpoint_path, map_location=None if t.cuda.is_available() else 'cpu', weights_only=True))
+        net.load_state_dict(t.load(checkpoint_path, map_location=next(net.parameters()).device, weights_only=True))
         return 1200, checkpoint_sample
 
 

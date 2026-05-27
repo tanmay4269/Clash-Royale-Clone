@@ -52,7 +52,7 @@ class AdvancedEloBased_CheckpointManagement:
             checkpoint_sample = max(allowed_indices)
             opponent_elo, filename = self.stored_by_idx[checkpoint_sample]
             checkpoint_path = os.path.join(self.checkpoint_dir, filename)
-            net.load_state_dict(t.load(checkpoint_path, map_location=None if t.cuda.is_available() else 'cpu', weights_only=True))
+            net.load_state_dict(t.load(checkpoint_path, map_location=next(net.parameters()).device, weights_only=True))
             return opponent_elo, checkpoint_sample
 
         allowed_by_elo = {}
@@ -83,7 +83,7 @@ class AdvancedEloBased_CheckpointManagement:
 
         opponent_elo, filename = self.stored_by_idx[checkpoint_sample]
         checkpoint_path = os.path.join(self.checkpoint_dir, filename)
-        net.load_state_dict(t.load(checkpoint_path, map_location=None if t.cuda.is_available() else 'cpu', weights_only=True))
+        net.load_state_dict(t.load(checkpoint_path, map_location=next(net.parameters()).device, weights_only=True))
         return opponent_elo, checkpoint_sample
 
 

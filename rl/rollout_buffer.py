@@ -170,7 +170,7 @@ class RolloutBuffer:
                 unflattened_dict[key] = flattened_array[current_index]
                 current_index += 1
             else:
-                size = np.prod(shape)
+                size = int(np.prod(shape))
                 
                 array_slice = flattened_array[:, current_index : current_index + size]
                 unflattened_dict[key] = array_slice.reshape(-1, *shape[1:])

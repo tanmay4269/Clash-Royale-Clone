@@ -2,6 +2,7 @@
     "files.exclude": {
         "**/__pycache__": true,
         "**/clash_royale_rl.egg-info": true,
+        "**/assets": true,
         "**/readme-assets": true,
         "**/wandb": true,
     }
