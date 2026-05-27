@@ -5,6 +5,9 @@ from game.entities.buildings.crown_tower import CrownTower
 import heapq
 from collections import deque
 
+# Toggle flag for pathfinding optimizations
+OPTIMIZE_PATHFINDING = True
+
 
 class Troop(Entity):
     COLLISION_COEF  = 10.0  # This times the overlap while collision is applied to this object
@@ -150,6 +153,8 @@ class Troop(Entity):
         if self.target != prev_target:
             self._is_first_hit = True
             self._attack_timer = 0  # Reset timer to discard stale delay from last attack
+            self.waypoints.clear()
+            self._last_path_target_pos = None
         
 
         ### If the target is in reach, navigate to it ###
@@ -173,7 +178,37 @@ class Troop(Entity):
 
         found_path = False
         if (self.position - self.target.position).length() > self.attack_radius_cells + eff_target_size:
-            found_path = self.find_path(arena_cell_occupancy)
+            if OPTIMIZE_PATHFINDING:
+                if not hasattr(self, "_path_tick_counter"):
+                    self._path_tick_counter = 0
+                if not hasattr(self, "_last_path_target_pos"):
+                    self._last_path_target_pos = None
+
+                self._path_tick_counter += 1
+
+                target_moved = (
+                    self._last_path_target_pos is None
+                    or (self.target.position - self._last_path_target_pos).length() > 16.0
+                )
+
+                arena_dirty = False
+                if hasattr(self, "arena") and self.arena is not None:
+                    arena_dirty = getattr(self.arena, "grid_dirty", False)
+
+                need_repath = (
+                    len(self.waypoints) == 0
+                    or target_moved
+                    or arena_dirty
+                    or (self._path_tick_counter % 10 == 0)
+                )
+
+                if need_repath:
+                    found_path = self.find_path(arena_cell_occupancy)
+                    self._last_path_target_pos = self.target.position.copy()
+                else:
+                    found_path = True
+            else:
+                found_path = self.find_path(arena_cell_occupancy)
 
             if not found_path:
                 print("(WARN: Troop::update): Couldn't find a path")
@@ -301,34 +336,46 @@ class Troop(Entity):
 
         SCALE = 16  # Reduction by this much on each axis
 
-        # Center-pixel sample for walls (avoids bleed into adjacent tiles).
-        center = occupancy_grid[SCALE//2::SCALE, SCALE//2::SCALE]
+        if OPTIMIZE_PATHFINDING and hasattr(self, "arena") and self.arena is not None:
+            if getattr(self.arena, "grid_dirty", True) or self.arena.cached_tiled_grid_ground is None:
+                self.arena.update_cached_grids()
 
-        # Max-pool across the full tile only for the building layer:
-        # if a building covers even one sub-pixel of a tile, block the whole tile.
-        h, w = occupancy_grid.shape
-        building_layer = (occupancy_grid == 2).astype(np.uint8)
-        building_any = (
-            building_layer
-            .reshape(h // SCALE, SCALE, w // SCALE, SCALE)
-            .max(axis=(1, 3))
-        ).astype(bool)
-
-        # Block: permanent walls (center-pixel) OR buildings (max-pool); troops passable.
-        if self.entity_type == EntityType.AIR:
-            # Air troops fly over river (center == 1)
-            tiled_occupancy_grid = np.where(
-                building_any, 1, 0
-            ).astype(int)
+            if self.entity_type == EntityType.AIR:
+                tiled_occupancy_grid = self.arena.cached_tiled_grid_air
+                free_cells = self.arena.cached_free_cells_air
+            else:
+                tiled_occupancy_grid = self.arena.cached_tiled_grid_ground
+                free_cells = self.arena.cached_free_cells_ground
+            grid_rows, grid_cols = tiled_occupancy_grid.shape
         else:
-            tiled_occupancy_grid = np.where(
-                (center == 1) | building_any, 1, 0
-            ).astype(int)
+            # Center-pixel sample for walls (avoids bleed into adjacent tiles).
+            center = occupancy_grid[SCALE//2::SCALE, SCALE//2::SCALE]
 
-        grid_rows, grid_cols = tiled_occupancy_grid.shape
+            # Max-pool across the full tile only for the building layer:
+            # if a building covers even one sub-pixel of a tile, block the whole tile.
+            h, w = occupancy_grid.shape
+            building_layer = (occupancy_grid == 2).astype(np.uint8)
+            building_any = (
+                building_layer
+                .reshape(h // SCALE, SCALE, w // SCALE, SCALE)
+                .max(axis=(1, 3))
+            ).astype(bool)
 
-        # All free tile indices, computed once and shared by both nearest_free calls.
-        free_cells = np.argwhere(tiled_occupancy_grid == 0)  # shape (K, 2)
+            # Block: permanent walls (center-pixel) OR buildings (max-pool); troops passable.
+            if self.entity_type == EntityType.AIR:
+                # Air troops fly over river (center == 1)
+                tiled_occupancy_grid = np.where(
+                    building_any, 1, 0
+                ).astype(int)
+            else:
+                tiled_occupancy_grid = np.where(
+                    (center == 1) | building_any, 1, 0
+                ).astype(int)
+
+            grid_rows, grid_cols = tiled_occupancy_grid.shape
+
+            # All free tile indices, computed once and shared by both nearest_free calls.
+            free_cells = np.argwhere(tiled_occupancy_grid == 0)  # shape (K, 2)
 
         from game.entities.building import Building
 

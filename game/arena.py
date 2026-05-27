@@ -1,5 +1,6 @@
 from game.utils import *
 from collections import deque
+import numpy as np
 
 from game.player_side import PlayerSide, PlayerSide1, PlayerSide2
 from game.entity import Entity
@@ -10,6 +11,9 @@ from game.entities.troop import Troop
 from game.entities.troops.knight import Knight
 from game.entities.troops.giant import Giant
 from game.entities.troops.mini_pekka import MiniPEKKA
+
+# Toggle flag for pathfinding optimizations
+OPTIMIZE_PATHFINDING = True
 
 
 class Arena:
@@ -54,9 +58,17 @@ class Arena:
         self.player_side_1.set_opponent(self.player_side_2)
         self.player_side_2.set_opponent(self.player_side_1)
 
+        # Cached grid state for optimized pathfinding
+        self.cached_tiled_grid_ground = None
+        self.cached_tiled_grid_air = None
+        self.cached_free_cells_ground = None
+        self.cached_free_cells_air = None
+        self.grid_dirty = True
+
         # Deploying crown towers: use list concat to preserve deterministic order
         towers = list(self.player_side_1.get_objects()) + list(self.player_side_2.get_objects())
         for obj in towers:
+            obj.arena = self
             self.deploy_entity(obj)
 
         # 
@@ -512,8 +524,11 @@ class Arena:
         deployed_objs = [obj for obj in self.deploy_buffer if obj.has_deployed(dt)]
         for obj in deployed_objs:
             if len(self.objects) < self.max_num_objects:
+                obj.arena = self
                 self.objects.append(obj)
                 # ! ADD TO PLAYER OBJECTS TOO
+                if isinstance(obj, Building):
+                    self.grid_dirty = True
             else:
                 print("(WARN: Arena::update) Buffer Management: Can't deploy since max num objects has been reached")
             self.deploy_buffer.remove(obj)
@@ -548,6 +563,7 @@ class Arena:
                     mask, mask_pos = obj.get_cell_occupancy()
                     self.occupy_cells(np.zeros_like(mask), mask_pos)
                     self.objects.remove(obj)
+                    self.grid_dirty = True
                     return True, False
                 elif obj == self.player_side_2.princess_tower_1 or \
                      obj == self.player_side_2.princess_tower_2:
@@ -556,6 +572,7 @@ class Arena:
                     mask, mask_pos = obj.get_cell_occupancy()
                     self.occupy_cells(np.zeros_like(mask), mask_pos)
                     self.objects.remove(obj)
+                    self.grid_dirty = True
                     return True, False
 
             # Clear the dead building's footprint from the occupancy grid so
@@ -564,6 +581,7 @@ class Arena:
                 mask, mask_pos = obj.get_cell_occupancy()
                 clear_mask = np.zeros_like(mask)
                 self.occupy_cells(clear_mask, mask_pos)
+                self.grid_dirty = True
 
             self.objects.remove(obj)
             # del obj
@@ -665,8 +683,10 @@ class Arena:
         # 3. Add to deploy buffer
         if hasattr(deploy_me, "get_units"):
             for unit in deploy_me.get_units():
+                unit.arena = self
                 self.deploy_buffer.append(unit)
         else:
+            deploy_me.arena = self
             self.deploy_buffer.append(deploy_me)
 
         # 4. Subtract player's elixirs and return True
@@ -713,3 +733,29 @@ class Arena:
         ] = mask
 
         return True
+
+
+    def update_cached_grids(self):
+        """Precomputes the 18x32 tiled occupancy grids and free cells for ground and air entities."""
+        SCALE = 16
+        # 1. Center-pixel sample for permanent walls (river, bridge)
+        center = self.cell_occupancy[SCALE//2::SCALE, SCALE//2::SCALE]
+        
+        # 2. Max-pool across the full tile for the building layer
+        h, w = self.cell_occupancy.shape
+        building_layer = (self.cell_occupancy == 2).astype(np.uint8)
+        building_any = (
+            building_layer
+            .reshape(h // SCALE, SCALE, w // SCALE, SCALE)
+            .max(axis=(1, 3))
+        ).astype(bool)
+        
+        # Air: only blocked by buildings
+        self.cached_tiled_grid_air = np.where(building_any, 1, 0).astype(int)
+        self.cached_free_cells_air = np.argwhere(self.cached_tiled_grid_air == 0)
+        
+        # Ground: blocked by buildings or river/walls (center == 1)
+        self.cached_tiled_grid_ground = np.where((center == 1) | building_any, 1, 0).astype(int)
+        self.cached_free_cells_ground = np.argwhere(self.cached_tiled_grid_ground == 0)
+        
+        self.grid_dirty = False
