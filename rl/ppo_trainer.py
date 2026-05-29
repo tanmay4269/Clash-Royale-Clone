@@ -1052,6 +1052,18 @@ class Trainer:
         self.loaded_checkpoint_indices = state.get("loaded_checkpoint_indices", [None] * self.num_envs)
         self.opponent_elos = state.get("opponent_elos", [self.cfg.elo.initial_rating] * self.num_envs)
 
+        # Adjust loaded lists to match the current num_envs if it was changed on resume
+        if len(self.loaded_checkpoint_indices) < self.num_envs:
+            self.loaded_checkpoint_indices += [None] * (self.num_envs - len(self.loaded_checkpoint_indices))
+        elif len(self.loaded_checkpoint_indices) > self.num_envs:
+            self.loaded_checkpoint_indices = self.loaded_checkpoint_indices[:self.num_envs]
+
+        if len(self.opponent_elos) < self.num_envs:
+            self.opponent_elos += [self.cfg.elo.initial_rating] * (self.num_envs - len(self.opponent_elos))
+        elif len(self.opponent_elos) > self.num_envs:
+            self.opponent_elos = self.opponent_elos[:self.num_envs]
+
+
         global_step = state["global_step"]
         print(f"(state) resumed from step {global_step} (elo={self.current_elo:.1f})")
         return global_step
