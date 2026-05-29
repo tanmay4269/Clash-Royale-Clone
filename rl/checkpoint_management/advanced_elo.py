@@ -179,7 +179,45 @@ class AdvancedEloBased_CheckpointManagement:
             filename = os.path.basename(val)
             stored_by_idx[idx] = (int(elo), filename)
             
-        self.stored_by_idx = stored_by_idx
-        self.stored_by_elo = {
-            int(k): list(v) for k, v in state["stored_by_elo"].items()
-        }
+        # Heal/sync stored_by_idx and stored_by_elo with actual files on disk
+        import glob
+        
+        healed_stored_by_idx = {}
+        healed_stored_by_elo = {}
+        
+        for idx, (elo, filename) in stored_by_idx.items():
+            expected_path = os.path.join(self.checkpoint_dir, filename)
+            if os.path.exists(expected_path):
+                healed_stored_by_idx[idx] = (elo, filename)
+                if elo not in healed_stored_by_elo:
+                    healed_stored_by_elo[elo] = []
+                healed_stored_by_elo[elo].append(idx)
+            else:
+                pattern = os.path.join(self.checkpoint_dir, f"checkpoint_{idx}_*.pt")
+                matching_files = sorted(glob.glob(pattern))
+                if matching_files:
+                    actual_path = matching_files[0]
+                    actual_filename = os.path.basename(actual_path)
+                    
+                    try:
+                        parts = actual_filename.rsplit(".", 1)[0].split("_")
+                        actual_elo = int(parts[-1])
+                    except Exception as e:
+                        print(f"[Warning] Could not parse ELO from filename {actual_filename}: {e}")
+                        actual_elo = elo
+                        
+                    print(f"[Info] Healed checkpoint index {idx}: mapped {filename} (ELO {elo}) -> {actual_filename} (ELO {actual_elo})")
+                    healed_stored_by_idx[idx] = (actual_elo, actual_filename)
+                    if actual_elo not in healed_stored_by_elo:
+                        healed_stored_by_elo[actual_elo] = []
+                    healed_stored_by_elo[actual_elo].append(idx)
+                else:
+                    print(f"[Warning] Checkpoint file {filename} not found, and no matching checkpoint_{idx}_*.pt exists.")
+                    healed_stored_by_idx[idx] = (elo, filename)
+                    if elo not in healed_stored_by_elo:
+                        healed_stored_by_elo[elo] = []
+                    healed_stored_by_elo[elo].append(idx)
+                    
+        self.stored_by_idx = healed_stored_by_idx
+        self.stored_by_elo = healed_stored_by_elo
+
