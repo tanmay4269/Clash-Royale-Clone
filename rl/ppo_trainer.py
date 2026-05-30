@@ -991,8 +991,41 @@ class Trainer:
                 state_1, state_2 = self.split_observations(state)
 
                 with t.no_grad():
-                    val_1, skip_logits_1, deck_logits_1, pos_logits_1 = net_2(self._normalize_obs(state_1))
-                    val_2, skip_logits_2, deck_logits_2, pos_logits_2 = net_1(self._normalize_obs(state_2))
+                    val_1, skip_logits_1, deck_logits_1, pos_logits_1, extra_1 = net_2(self._normalize_obs(state_1))
+                    val_2, skip_logits_2, deck_logits_2, pos_logits_2, extra_2 = net_1(self._normalize_obs(state_2))
+
+                    # Apply temperature scaling if enabled (since net() returns unscaled logits)
+                    if net_2.use_learned_temperature:
+                        skip_logits_1 = skip_logits_1 / t.nn.functional.softplus(net_2.log_temp_skip)
+                        deck_logits_1 = deck_logits_1 / t.nn.functional.softplus(net_2.log_temp_deck)
+                    if net_1.use_learned_temperature:
+                        skip_logits_2 = skip_logits_2 / t.nn.functional.softplus(net_1.log_temp_skip)
+                        deck_logits_2 = deck_logits_2 / t.nn.functional.softplus(net_1.log_temp_deck)
+
+                    skip_dist_1 = t.distributions.Bernoulli(logits=skip_logits_1)
+                    deck_dist_1 = t.distributions.Categorical(logits=deck_logits_1)
+                    skip_dist_2 = t.distributions.Bernoulli(logits=skip_logits_2)
+                    deck_dist_2 = t.distributions.Categorical(logits=deck_logits_2)
+
+                    action_deck_1 = deck_dist_1.sample()
+                    action_deck_2 = deck_dist_2.sample()
+
+                    if pos_logits_1 is None and extra_1 is not None:
+                        trunk_out_1, hand_embed_1 = extra_1
+                        B = trunk_out_1.shape[0]
+                        chosen_embed_1 = hand_embed_1[t.arange(B, device=trunk_out_1.device), action_deck_1.long()]
+                        pos_logits_1 = net_2.actor_position_net(t.cat([trunk_out_1, chosen_embed_1], dim=-1))
+
+                    if pos_logits_2 is None and extra_2 is not None:
+                        trunk_out_2, hand_embed_2 = extra_2
+                        B = trunk_out_2.shape[0]
+                        chosen_embed_2 = hand_embed_2[t.arange(B, device=trunk_out_2.device), action_deck_2.long()]
+                        pos_logits_2 = net_1.actor_position_net(t.cat([trunk_out_2, chosen_embed_2], dim=-1))
+
+                    if net_2.use_learned_temperature and pos_logits_1 is not None:
+                        pos_logits_1 = pos_logits_1 / t.nn.functional.softplus(net_2.log_temp_pos)
+                    if net_1.use_learned_temperature and pos_logits_2 is not None:
+                        pos_logits_2 = pos_logits_2 / t.nn.functional.softplus(net_1.log_temp_pos)
 
                     if net_2.invalid_position_mask is not None:
                         pos_logits_1 = pos_logits_1.masked_fill(net_2.invalid_position_mask, float('-inf'))
@@ -1007,22 +1040,17 @@ class Trainer:
                     deck_probs_2 = F.softmax(deck_logits_2, dim=-1).squeeze(0).cpu().numpy()
                     pos_probs_2  = F.softmax(pos_logits_2, dim=-1).squeeze(0).cpu().numpy()
 
-                    skip_dist_1 = t.distributions.Bernoulli(logits=skip_logits_1)
-                    deck_dist_1 = t.distributions.Categorical(logits=deck_logits_1)
                     pos_dist_1 = t.distributions.Categorical(logits=pos_logits_1)
-
-                    skip_dist_2 = t.distributions.Bernoulli(logits=skip_logits_2)
-                    deck_dist_2 = t.distributions.Categorical(logits=deck_logits_2)
                     pos_dist_2 = t.distributions.Categorical(logits=pos_logits_2)
 
                     action_1 = {
                         "skip": skip_dist_1.sample().detach(),
-                        "deck_idx": deck_dist_1.sample().detach(),
+                        "deck_idx": action_deck_1.detach(),
                         "position": pos_dist_1.sample().detach(),
                     }
                     action_2 = {
                         "skip": skip_dist_2.sample().detach(),
-                        "deck_idx": deck_dist_2.sample().detach(),
+                        "deck_idx": action_deck_2.detach(),
                         "position": pos_dist_2.sample().detach(),
                     }
             
