@@ -48,15 +48,19 @@ class Trainer:
         disjoint_actor_critic=True,
         use_cnn_position_decoder=True,
         use_layer_init=True,
+        use_learned_temperature=True,
         append_deck_info_to_position_head_input=True,
         use_attention_over_entities=True,
         use_pointer_decoder=True,
+        num_transformer_layers=2,
+        per_head_grad_clip=False,
 
         # Run / Logging
         gym_env_name="ClashRoyaleEnv-v0",
         run_name=None,
         resume_run=None,
         save_state_every=100_000,
+        max_steps=10_000_000,
 
         # Flags / Mode
         use_lr_tuner=True,
@@ -180,9 +184,13 @@ class Trainer:
         self.cfg.network.disjoint_actor_critic = disjoint_actor_critic
         self.cfg.network.use_cnn_position_decoder = use_cnn_position_decoder
         self.cfg.network.use_layer_init = use_layer_init
+        self.cfg.network.use_learned_temperature = use_learned_temperature
         self.cfg.network.append_deck_info_to_position_head_input = append_deck_info_to_position_head_input
         self.cfg.network.use_attention_over_entities = use_attention_over_entities
         self.cfg.network.use_pointer_decoder = use_pointer_decoder
+        self.cfg.network.num_layers = num_transformer_layers
+
+        self.per_head_grad_clip = per_head_grad_clip
 
         # Buffer Related
         self.cfg.buffer.gae_gamma = gae_gamma
@@ -264,7 +272,7 @@ class Trainer:
         self.cfg.obs_normalization = obs_normalization
         self.cfg.value_normalization = value_normalization
 
-        self.cfg.max_steps = 10_000_000  # total env steps
+        self.cfg.max_steps = max_steps  # total env steps
 
         # Running EMA stats for obs normalisation (updated once per rollout, applied at inference)
         # Initialised lazily after the first rollout when the flat-state dimension is known.
@@ -582,18 +590,37 @@ class Trainer:
             if _is_profile_update:
                 _buf_total = time.perf_counter() - _buf_collect_start
                 _n_frames = len(_frame_times)
+
+                # Padding stats: how many deployed card slots are actually occupied
+                if buffer.ptr > 0 and buffer.state_shapes is not None:
+                    _all_obs = buffer.unflatten_dict(buffer.states[:buffer.ptr], buffer.state_shapes)
+                    _my_occ = (_all_obs['my_cards'].abs().sum(dim=-1) > 0).float().sum(dim=-1)
+                    _op_occ = (_all_obs['opponent_cards'].abs().sum(dim=-1) > 0).float().sum(dim=-1)
+                    _my_mean, _my_max = _my_occ.mean().item(), _my_occ.max().item()
+                    _op_mean, _op_max = _op_occ.mean().item(), _op_occ.max().item()
+                else:
+                    _my_mean = _my_max = _op_mean = _op_max = float('nan')
+
                 print("\n" + "="*60)
                 print("(PROFILE) Buffer collection stats (update 2/2)")
                 print(f"  Total collection time : {_buf_total:.3f}s")
                 print(f"  Steps collected       : {steps_collected}")
-                print(f"  Time per step         : {_buf_total / max(steps_collected, 1) * 1000:.3f}ms")
+                print(f"  Time per step         : {_buf_total / max(steps_collected, 1) * 1000:.3f}ms  ({1000 / (_buf_total / max(steps_collected, 1) * 1000):.1f} fps)")
                 print(f"  Env frames timed      : {_n_frames}")
                 if _frame_times:
-                    print(f"  Avg frame step time   : {np.mean(_frame_times)*1000:.3f}ms")
-                    print(f"  Min frame step time   : {np.min(_frame_times)*1000:.3f}ms")
-                    print(f"  Max frame step time   : {np.max(_frame_times)*1000:.3f}ms")
-                    print(f"  P95 frame step time   : {np.percentile(_frame_times, 95)*1000:.3f}ms")
+                    _avg_ms = np.mean(_frame_times)*1000
+                    _min_ms = np.min(_frame_times)*1000
+                    _max_ms = np.max(_frame_times)*1000
+                    _p95_ms = np.percentile(_frame_times, 95)*1000
+                    print(f"  Avg frame step time   : {_avg_ms:.3f}ms  ({1000/_avg_ms:.1f} fps)")
+                    print(f"  Min frame step time   : {_min_ms:.3f}ms  ({1000/_min_ms:.1f} fps)")
+                    print(f"  Max frame step time   : {_max_ms:.3f}ms  ({1000/_max_ms:.1f} fps)")
+                    print(f"  P95 frame step time   : {_p95_ms:.3f}ms  ({1000/_p95_ms:.1f} fps)")
                 print(f"  GAE compute time      : {_gae_time*1000:.3f}ms")
+                print(f"")
+                print(f"  -- Deployed card occupancy (of {self.max_num_objects} slots) --")
+                print(f"  My cards    avg/max   : {_my_mean:.1f} / {_my_max:.0f}")
+                print(f"  Opp cards   avg/max   : {_op_mean:.1f} / {_op_max:.0f}")
                 print("="*60)
 
             pre_update_net = deepcopy(net_1)
@@ -796,7 +823,32 @@ class Trainer:
         if optimize:
             optimiser.zero_grad()
             loss.backward()
-            pre_clip_grad_norm = nn.utils.clip_grad_norm_(net.parameters(), self.cfg.grad_clip).item()
+
+            if self.per_head_grad_clip:
+                # Per-head gradient clipping: different heads have very different
+                # gradient magnitudes (position head 576-dim vs skip head 1-dim).
+                head_groups = {
+                    'critic':   [p for n, p in net.named_parameters() if 'critic' in n and p.grad is not None],
+                    'position': [p for n, p in net.named_parameters() if 'position' in n and p.grad is not None],
+                    'skip':     [p for n, p in net.named_parameters() if 'skip' in n and p.grad is not None],
+                    'deck':     [p for n, p in net.named_parameters() if 'deck' in n and p.grad is not None],
+                    'pointer':  [p for n, p in net.named_parameters() if 'pointer' in n and p.grad is not None],
+                }
+                # Clip each head group independently
+                for _, params in head_groups.items():
+                    if params:
+                        nn.utils.clip_grad_norm_(params, self.cfg.grad_clip)
+                # Clip the remaining (backbone) parameters
+                named_head_params = set()
+                for params in head_groups.values():
+                    named_head_params.update(id(p) for p in params)
+                backbone_params = [p for p in net.parameters() if id(p) not in named_head_params and p.grad is not None]
+                if backbone_params:
+                    nn.utils.clip_grad_norm_(backbone_params, self.cfg.grad_clip)
+                pre_clip_grad_norm = nn.utils.clip_grad_norm_(net.parameters(), float('inf')).item()  # measure only
+            else:
+                pre_clip_grad_norm = nn.utils.clip_grad_norm_(net.parameters(), self.cfg.grad_clip).item()
+
             optimiser.step()
             if scheduler is not None:
                 scheduler.step()
@@ -1276,6 +1328,13 @@ if __name__ == "__main__":
         metavar="STEPS",
         help="Save a full training-state snapshot every N global env steps.",
     )
+    run_group.add_argument(
+        "--max_steps",
+        type=int,
+        default=10_000_000,
+        metavar="STEPS",
+        help="Maximum environmental steps to train for.",
+    )
 
     # Flags / Mode
     flags_group = parser.add_argument_group("General Flags / Modes")
@@ -1360,6 +1419,24 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Use pointer scoring mechanism for deck selection."
+    )
+    net_group.add_argument(
+        "--use_learned_temperature",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use learned per-head temperature scaling on logits."
+    )
+    net_group.add_argument(
+        "--num_transformer_layers",
+        type=int,
+        default=2,
+        help="Number of Transformer encoder layers (only used with --network_type=transformer)."
+    )
+    net_group.add_argument(
+        "--per_head_grad_clip",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Clip gradients independently per action head (skip/deck/position/critic) instead of globally."
     )
 
     # Reward Shaping
@@ -1475,15 +1552,19 @@ if __name__ == "__main__":
         disjoint_actor_critic=args.disjoint_actor_critic,
         use_cnn_position_decoder=args.use_cnn_position_decoder,
         use_layer_init=args.use_layer_init,
+        use_learned_temperature=args.use_learned_temperature,
         append_deck_info_to_position_head_input=args.append_deck_info_to_position_head_input,
         use_attention_over_entities=args.use_attention_over_entities,
         use_pointer_decoder=args.use_pointer_decoder,
+        num_transformer_layers=args.num_transformer_layers,
+        per_head_grad_clip=args.per_head_grad_clip,
 
         # Run / Logging
         gym_env_name="ClashRoyaleEnv-v0",
         run_name=args.run_name,
         resume_run=args.resume_run,
         save_state_every=args.save_state_every,
+        max_steps=args.max_steps,
 
         # Flags / Mode
         use_lr_tuner=args.use_lr_tuner,

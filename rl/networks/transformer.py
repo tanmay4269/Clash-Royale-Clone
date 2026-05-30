@@ -8,6 +8,7 @@ class TransformerEncoderPart(nn.Module):
     def __init__(
         self, 
         layer_init, 
+        activation_layer,
         entity_encoder_in_ch, 
         d_model, 
         num_segments, 
@@ -17,8 +18,14 @@ class TransformerEncoderPart(nn.Module):
         super().__init__()
 
         # Input projections
-        self.meta_proj = layer_init(nn.Linear(2, d_model))
         self.entity_proj = layer_init(nn.Linear(entity_encoder_in_ch, d_model))
+
+        # Meta (elixirs + game_completion_fraction) is added directly to the CLS token
+        # instead of wasting a full sequence position on 2 scalars.
+        self.meta_scale = nn.Sequential(
+            layer_init(nn.Linear(2, d_model)),
+            activation_layer(),
+        )
 
         # Segment and CLS embeddings
         self.segment_embedding = nn.Embedding(num_segments, d_model)
@@ -29,6 +36,8 @@ class TransformerEncoderPart(nn.Module):
             d_model=d_model,
             nhead=num_heads,
             dim_feedforward=d_model * 4,
+            dropout=0.0,        # Dropout is harmful in RL: destabilises value estimates
+            norm_first=True,    # Pre-LN: more stable gradient flow than Post-LN
             batch_first=True,
         )
         self.transformer_encoder = nn.TransformerEncoder(
@@ -51,7 +60,7 @@ class TransformerActorCritic(BaseActorCritic):
         d_model=64,
         num_heads=4,
         num_layers=2,
-        num_segments=5,
+        num_segments=4,
 
         activation_fn='relu',
         
@@ -63,6 +72,9 @@ class TransformerActorCritic(BaseActorCritic):
          
         # use_cnn_position_decoder=False,
         use_cnn_position_decoder=True,
+
+        # use_learned_temperature=False,
+        use_learned_temperature=True,
 
         # append_deck_info_to_position_head_input=False,
         append_deck_info_to_position_head_input=True,
@@ -86,6 +98,7 @@ class TransformerActorCritic(BaseActorCritic):
             use_layer_init=use_layer_init,
 
             use_cnn_position_decoder=use_cnn_position_decoder,
+            use_learned_temperature=use_learned_temperature,
 
             num_cards_in_hand=num_cards_in_hand,
             max_num_cards=max_num_cards,
@@ -107,6 +120,7 @@ class TransformerActorCritic(BaseActorCritic):
         def make_transformer_encoder():
             return TransformerEncoderPart(
                 self.layer_init,
+                self.activation_layer,
                 entity_encoder_in_ch,
                 d_model,
                 num_segments,
@@ -117,6 +131,10 @@ class TransformerActorCritic(BaseActorCritic):
         def make_post_transformer():
             return nn.Sequential(
                 self.layer_init(nn.Linear(d_model, trunk_out_ch)),
+                nn.LayerNorm(trunk_out_ch),
+                self.activation_layer(),
+
+                self.layer_init(nn.Linear(trunk_out_ch, trunk_out_ch)),
                 nn.LayerNorm(trunk_out_ch),
                 self.activation_layer(),
             )
@@ -138,15 +156,15 @@ class TransformerActorCritic(BaseActorCritic):
         
         if not self.use_pointer_decoder:
             self.actor_skip_net = nn.Sequential(
-                self.layer_init(nn.Linear(trunk_out_ch, 1))
+                self.layer_init(nn.Linear(trunk_out_ch, 1), std=0.01)
             )
             
             self.actor_deck_idx_net = nn.Sequential(
-                self.layer_init(nn.Linear(d_model, 1))
+                self.layer_init(nn.Linear(d_model, 1), std=0.01)
             )
         else:
             self.skip_token = nn.Parameter(t.zeros(d_model))
-            self.pointer_query = self.layer_init(nn.Linear(trunk_out_ch, d_model))
+            self.pointer_query = self.layer_init(nn.Linear(trunk_out_ch, d_model), std=0.01)
 
         self.actor_position_net = self.make_position_head(
             use_cnn_position_decoder,
@@ -161,10 +179,10 @@ class TransformerActorCritic(BaseActorCritic):
         device = obs["my_cards"].device
         N = self.max_num_cards
 
-        # Token construction
-        meta = encoder.meta_proj(t.cat([
+        # Meta features are added directly to the CLS token
+        meta = encoder.meta_scale(t.cat([
             obs["game_completion_fraction"], obs["elixirs"]
-        ], dim=-1)).unsqueeze(1)
+        ], dim=-1))  # (B, d_model)
 
         all_entity_features = t.cat([
             obs["my_crown_towers"],
@@ -176,16 +194,16 @@ class TransformerActorCritic(BaseActorCritic):
         ], dim=1).to(dtype=t.float32)
         entity_tokens = encoder.entity_proj(all_entity_features)
 
-        cls = encoder.cls_token.expand(B, -1, -1)
-        tokens = t.cat([cls, meta, entity_tokens], dim=1)
+        # CLS token enriched with meta information
+        cls = encoder.cls_token.expand(B, -1, -1) + meta.unsqueeze(1)
+        tokens = t.cat([cls, entity_tokens], dim=1)
 
-        # Segment IDs: CLS, meta, towers, deployed, hand+next
+        # Segment IDs: CLS, towers, deployed, hand+next  (meta folded into CLS)
         seg_ids = t.cat([
-            t.full((B, 1),                          0, dtype=t.long, device=device),
-            t.full((B, 1),                          1, dtype=t.long, device=device),
-            t.full((B, 6),                          2, dtype=t.long, device=device),
-            t.full((B, 2 * N),                      3, dtype=t.long, device=device),
-            t.full((B, self.num_cards_in_hand + 1), 4, dtype=t.long, device=device),
+            t.full((B, 1),                           0, dtype=t.long, device=device),
+            t.full((B, 6),                           1, dtype=t.long, device=device),
+            t.full((B, 2 * N),                       2, dtype=t.long, device=device),
+            t.full((B, self.num_cards_in_hand + 1),  3, dtype=t.long, device=device),
         ], dim=1)
         tokens = tokens + encoder.segment_embedding(seg_ids)
 
@@ -195,7 +213,7 @@ class TransformerActorCritic(BaseActorCritic):
         ], dim=1).abs().sum(dim=-1) == 0
 
         padding_mask = t.cat([
-            t.zeros(B, 1 + 1 + 6, dtype=t.bool, device=device),
+            t.zeros(B, 1 + 6, dtype=t.bool, device=device),
             card_padding,
             t.zeros(B, self.num_cards_in_hand + 1, dtype=t.bool, device=device),
         ], dim=1)
@@ -205,7 +223,7 @@ class TransformerActorCritic(BaseActorCritic):
 
         trunk_out = post_transformer(encoded[:, 0])
 
-        hand_start = 1 + 1 + 6 + 2 * N
+        hand_start = 1 + 6 + 2 * N
         hand_out = encoded[:, hand_start : hand_start + self.num_cards_in_hand]
         return trunk_out, hand_out
 
@@ -259,7 +277,7 @@ if __name__ == "__main__":
             d_model=64,
             num_heads=4,
             num_layers=2,
-            num_segments=5,
+            num_segments=4,
 
             activation_fn=activation_fn,
             disjoint_actor_critic=disjoint_actor_critic,

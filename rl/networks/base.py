@@ -19,6 +19,9 @@ class BaseActorCritic(nn.Module):
         # use_cnn_position_decoder=False,
         use_cnn_position_decoder=True,
 
+        # use_learned_temperature=False,
+        use_learned_temperature=True,
+
         num_cards_in_hand=4,
         max_num_cards=32,
         position_space_width=18,
@@ -33,6 +36,7 @@ class BaseActorCritic(nn.Module):
         self.activation_fn = activation_fn
         self.use_layer_init = use_layer_init
         self.use_cnn_position_decoder = use_cnn_position_decoder
+        self.use_learned_temperature = use_learned_temperature
 
         self.num_cards_in_hand = num_cards_in_hand
         self.max_num_cards = max_num_cards
@@ -46,10 +50,16 @@ class BaseActorCritic(nn.Module):
 
         self.max_elixirs = max_elixirs
         self.deploy_cost_idx = deploy_cost_idx
+
+        # Learned temperature: each head gets its own temperature parameter.
+        # Initialized to 1.0 (no-op). Softplus ensures positivity.
+        if self.use_learned_temperature:
+            self.log_temp_skip = nn.Parameter(t.zeros(1))  # softplus(0) ≈ 0.693
+            self.log_temp_deck = nn.Parameter(t.zeros(1))
+            self.log_temp_pos  = nn.Parameter(t.zeros(1))
     
 
-    def layer_init(self, layer, std=0.01, bias_const=0.0):
-        # except for critic head, rest all should have low std. 
+    def layer_init(self, layer, std=np.sqrt(2), bias_const=0.0):
         if not self.use_layer_init:
             return layer
 
@@ -78,7 +88,7 @@ class BaseActorCritic(nn.Module):
     ):
         if not use_cnn_position_decoder:
             return nn.Sequential(
-                self.layer_init(nn.Linear(input_ch, position_space_width * position_space_height))
+                self.layer_init(nn.Linear(input_ch, position_space_width * position_space_height), std=0.01)
             )
         
         assert position_space_width == 18 and position_space_height == 32, "CNN decoder is hardcoded to 32x18 position space"
@@ -122,13 +132,22 @@ class BaseActorCritic(nn.Module):
                 kernel_size=(4, 7),
                 stride=(2, 1),
                 padding=(1, 0)
-            )),
+            ), std=0.01),
 
             # (1,32,18) -> (32*18)
             nn.Flatten(),
         )
 
     
+    def _denorm_elixirs(self, obs):
+        """Reverse the env's [-1, 1] normalization on elixirs and hand deploy costs.
+        Returns (raw_elixirs, hand_raw_costs) both in original [0, max_elixirs] scale."""
+        raw_elixirs = (obs["elixirs"] + 1.0) / 2.0 * self.max_elixirs  # (B, 1)
+        hand_normalized_costs = obs["my_hand"][..., self.deploy_cost_idx]  # (B, 4)
+        hand_raw_costs = hand_normalized_costs * (self.max_elixirs / 2.0) + (self.max_elixirs / 2.0)
+        return raw_elixirs, hand_raw_costs
+
+
     def forward(self, obs):
         raise NotImplementedError
 
@@ -152,14 +171,19 @@ class BaseActorCritic(nn.Module):
         """
         value, skip_logits, deck_logits, pos_logits, pos_head_input = self(obs)
 
+        # --- Learned temperature scaling ---
+        if self.use_learned_temperature:
+            # softplus ensures temperature is always positive
+            skip_logits = skip_logits / t.nn.functional.softplus(self.log_temp_skip)
+            deck_logits = deck_logits / t.nn.functional.softplus(self.log_temp_deck)
+            # pos_logits scaled later (may be None when position head is conditioned on card)
+
         # --- Static masks ---
         if invalid_deck_mask is not None:
             deck_logits = deck_logits.masked_fill(invalid_deck_mask, float('-inf'))
 
         # --- Elixir masks ---
-        raw_elixirs = (obs["elixirs"] + 1.0) / 2.0 * self.max_elixirs  # (B, 1)
-        hand_normalized_costs = obs["my_hand"][..., self.deploy_cost_idx]  # (B, 4)
-        hand_raw_costs = hand_normalized_costs * (self.max_elixirs / 2.0) + (self.max_elixirs / 2.0)
+        raw_elixirs, hand_raw_costs = self._denorm_elixirs(obs)
         elixir_mask = hand_raw_costs > raw_elixirs  # (B, 4)
         deck_logits = deck_logits.masked_fill(elixir_mask, float('-inf'))
 
@@ -188,6 +212,10 @@ class BaseActorCritic(nn.Module):
             pos_logits = self.actor_position_net(
                 t.cat([trunk_out, chosen_embed], dim=-1)
             )
+
+        # Apply temperature to position logits (deferred from above when pos_logits was None)
+        if self.use_learned_temperature:
+            pos_logits = pos_logits / t.nn.functional.softplus(self.log_temp_pos)
 
         if invalid_position_mask is not None:
             pos_logits = pos_logits.masked_fill(invalid_position_mask, float('-inf'))

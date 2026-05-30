@@ -27,6 +27,9 @@ class DeepSetsActorCritic(BaseActorCritic):
         
         # use_layer_init=False,
         use_layer_init=True,
+
+        # use_learned_temperature=False,
+        use_learned_temperature=True,
         
         # append_deck_info_to_position_head_input=False,
         append_deck_info_to_position_head_input=True,
@@ -51,6 +54,7 @@ class DeepSetsActorCritic(BaseActorCritic):
             use_layer_init=use_layer_init,
 
             use_cnn_position_decoder=use_cnn_position_decoder,
+            use_learned_temperature=use_learned_temperature,
 
             num_cards_in_hand=num_cards_in_hand,
             max_num_cards=max_num_cards,
@@ -72,10 +76,6 @@ class DeepSetsActorCritic(BaseActorCritic):
                 self.layer_init(nn.Linear(entity_encoder_in_ch, entity_encoder_mid_ch)),
                 nn.LayerNorm(entity_encoder_mid_ch),
                 self.activation_layer(),
-
-                # self.layer_init(nn.Linear(entity_encoder_mid_ch, entity_encoder_mid_ch)),
-                # nn.LayerNorm(entity_encoder_mid_ch),
-                # self.activation_layer(),
 
                 self.layer_init(nn.Linear(entity_encoder_mid_ch, entity_encoder_out_ch)),
                 nn.LayerNorm(entity_encoder_out_ch),
@@ -136,15 +136,15 @@ class DeepSetsActorCritic(BaseActorCritic):
 
         if not self.use_pointer_decoder:
             self.actor_skip_net = nn.Sequential(
-                self.layer_init(nn.Linear(trunk_out_ch, 1))
+                self.layer_init(nn.Linear(trunk_out_ch, 1), std=0.01)
             )
 
             self.actor_deck_idx_net = nn.Sequential(
-                self.layer_init(nn.Linear(trunk_out_ch, num_cards_in_hand))
+                self.layer_init(nn.Linear(trunk_out_ch, num_cards_in_hand), std=0.01)
             )
         else:
             self.skip_token = nn.Parameter(t.zeros(entity_encoder_out_ch))
-            self.pointer_query = self.layer_init(nn.Linear(trunk_out_ch, entity_encoder_out_ch))
+            self.pointer_query = self.layer_init(nn.Linear(trunk_out_ch, entity_encoder_out_ch), std=0.01)
 
         self.actor_position_net = self.make_position_head(
             use_cnn_position_decoder,
