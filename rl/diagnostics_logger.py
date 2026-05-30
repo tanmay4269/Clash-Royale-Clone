@@ -204,9 +204,10 @@ class DiagnosticsLogger:
         # --- Per-head policy diagnostics ---
         with t.no_grad():
             batch = next(iter(buffer.get_minibatches(self.cfg.minibatch_size)))
-            states_tensor = batch[0]
+            states_tensor, actions_tensor = batch[0], batch[1]
             device = next(net_curr.parameters()).device
             states_tensor = {k: v.to(device) for k, v in states_tensor.items()}
+            actions_tensor = {k: v.to(device) for k, v in actions_tensor.items()}
 
             fwd_curr = net_curr(states_tensor)
             fwd_init = net_init(states_tensor)
@@ -245,10 +246,46 @@ class DiagnosticsLogger:
                 }, step=global_step)
 
             else:
-                # DeepSets: separate Bernoulli skip + Categorical deck heads
-                _, skip_log_curr, deck_log_curr, pos_log_curr = fwd_curr
-                _, skip_log_init, deck_log_init, pos_log_init = fwd_init
-                _, skip_log_prev, deck_log_prev, pos_log_prev = fwd_prev
+                # DeepSets / Transformer: separate Bernoulli skip + Categorical deck heads
+                _, skip_log_curr, deck_log_curr, pos_log_curr, extra_curr = fwd_curr
+                _, skip_log_init, deck_log_init, pos_log_init, extra_init = fwd_init
+                _, skip_log_prev, deck_log_prev, pos_log_prev, extra_prev = fwd_prev
+
+                if pos_log_curr is None and extra_curr is not None:
+                    # Reconstruct position logits conditioned on the actual deck action
+                    action_deck = actions_tensor["deck_idx"]
+                    
+                    trunk_out_curr, hand_embed_curr = extra_curr
+                    B = trunk_out_curr.shape[0]
+                    chosen_embed_curr = hand_embed_curr[t.arange(B, device=device), action_deck.long()]
+                    pos_log_curr = net_curr.actor_position_net(t.cat([trunk_out_curr, chosen_embed_curr], dim=-1))
+                    
+                    trunk_out_init, hand_embed_init = extra_init
+                    chosen_embed_init = hand_embed_init[t.arange(B, device=device), action_deck.long()]
+                    pos_log_init = net_init.actor_position_net(t.cat([trunk_out_init, chosen_embed_init], dim=-1))
+                    
+                    trunk_out_prev, hand_embed_prev = extra_prev
+                    chosen_embed_prev = hand_embed_prev[t.arange(B, device=device), action_deck.long()]
+                    pos_log_prev = net_prev.actor_position_net(t.cat([trunk_out_prev, chosen_embed_prev], dim=-1))
+
+                # Apply temperature scaling if enabled
+                if net_curr.use_learned_temperature:
+                    skip_log_curr = skip_log_curr / t.nn.functional.softplus(net_curr.log_temp_skip)
+                    deck_log_curr = deck_log_curr / t.nn.functional.softplus(net_curr.log_temp_deck)
+                    if pos_log_curr is not None:
+                        pos_log_curr = pos_log_curr / t.nn.functional.softplus(net_curr.log_temp_pos)
+
+                if net_init.use_learned_temperature:
+                    skip_log_init = skip_log_init / t.nn.functional.softplus(net_init.log_temp_skip)
+                    deck_log_init = deck_log_init / t.nn.functional.softplus(net_init.log_temp_deck)
+                    if pos_log_init is not None:
+                        pos_log_init = pos_log_init / t.nn.functional.softplus(net_init.log_temp_pos)
+
+                if net_prev.use_learned_temperature:
+                    skip_log_prev = skip_log_prev / t.nn.functional.softplus(net_prev.log_temp_skip)
+                    deck_log_prev = deck_log_prev / t.nn.functional.softplus(net_prev.log_temp_deck)
+                    if pos_log_prev is not None:
+                        pos_log_prev = pos_log_prev / t.nn.functional.softplus(net_prev.log_temp_pos)
 
                 skip_dist_curr = t.distributions.Bernoulli(logits=skip_log_curr)
                 deck_dist_curr = t.distributions.Categorical(logits=deck_log_curr)
