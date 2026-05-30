@@ -23,7 +23,7 @@ class BaseActorCritic(nn.Module):
         use_learned_temperature=True,
 
         num_cards_in_hand=4,
-        max_num_cards=32,
+        max_num_cards=20,
         position_space_width=18,
         position_space_height=32,
 
