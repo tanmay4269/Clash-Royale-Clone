@@ -24,7 +24,7 @@ class Arena:
         self.width = 18  # In tiles
         self.height = 32
 
-        self.max_num_objects = 32  # Arbitrary
+        self.max_num_objects = 20  # Actually ran the simulation
         self.objects: List[Entity] = []  # Contains all in game objects that have been deployed like buildings, troupes, etc.
         self.deploy_buffer: List[Entity] = []  # Contains items that haven't deployed yet but need to be rendered
 

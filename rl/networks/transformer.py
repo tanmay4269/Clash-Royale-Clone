@@ -62,7 +62,7 @@ class TransformerActorCritic(BaseActorCritic):
         num_layers=2,
         num_segments=4,
 
-        activation_fn='relu',
+        activation_fn='tanh',
         
         # disjoint_actor_critic=False,
         disjoint_actor_critic=True,

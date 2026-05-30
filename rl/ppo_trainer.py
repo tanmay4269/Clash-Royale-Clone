@@ -1484,17 +1484,17 @@ if __name__ == "__main__":
     # PPO
     ppo_group = parser.add_argument_group("PPO Algorithm Hyperparameters")
     ppo_group.add_argument(
+        "--kl_early_stopping",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable early stopping based on KL divergence."
+    )
+    ppo_group.add_argument(
         "--kl_threshold",
         type=float,
         default=0.01,
         metavar="KL",
         help="Max approximate KL divergence allowed per PPO update. The epoch loop exits early when exceeded. Default: 0.01."
-    )
-    ppo_group.add_argument(
-        "--kl_early_stopping",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Enable early stopping based on KL divergence."
     )
     ppo_group.add_argument(
         "--obs_normalization",
@@ -1511,7 +1511,7 @@ if __name__ == "__main__":
     ppo_group.add_argument(
         "--num_ppo_epochs",
         type=int,
-        default=6,
+        default=8,
         metavar="K",
         help="Number of PPO gradient epochs per rollout (subject to KL early stopping)."
     )
@@ -1524,7 +1524,7 @@ if __name__ == "__main__":
     ppo_group.add_argument(
         "--num_games_in_buffer",
         type=int,
-        default=10,
+        default=8,
         help="Number of games to keep in the rollout buffer."
     )
 
