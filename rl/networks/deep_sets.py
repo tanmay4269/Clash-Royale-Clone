@@ -167,20 +167,21 @@ class DeepSetsActorCritic(BaseActorCritic):
         return attention_norm(embeddings + attn_out)
 
 
-    def get_trunk_input(self, obs, all_embeddings, encoder):
+    def get_trunk_input(self, obs, all_embeddings):
         my_card_embeddings       = all_embeddings[:, 0 : self.max_num_cards]
         opponent_card_embeddings = all_embeddings[:, self.max_num_cards : 2 * self.max_num_cards]
 
         my_crown_tower_embeddings       = all_embeddings[:, 2 * self.max_num_cards : 2 * self.max_num_cards + 3]
-        opponent_crown_tower_embeddings = all_embeddings[:, 2 * self.max_num_cards + 3 :]
+        opponent_crown_tower_embeddings = all_embeddings[:, 2 * self.max_num_cards + 3 : 2 * self.max_num_cards + 6]
+
+        hand_start = 2 * self.max_num_cards + 6
+        hand_embeddings = all_embeddings[:, hand_start : hand_start + self.num_cards_in_hand]
+        next_card_embeddings = all_embeddings[:, hand_start + self.num_cards_in_hand]  # (B, entity_encoder_out_ch)
 
         def masked_mean(embeddings, entities):
             mask = (entities.abs().sum(dim=-1, keepdim=True) > 0).to(dtype=embeddings.dtype)
             count = mask.sum(dim=1).clamp(min=1.0)
             return (embeddings * mask).sum(dim=1) / count
-
-        hand_embeddings = encoder(obs["my_hand"])  # (B, 4, entity_encoder_out_ch)
-        next_card_embeddings = encoder(obs["my_next_card"].unsqueeze(1)).squeeze(1)  # (B, entity_encoder_out_ch)
 
         trunk_input = t.cat([
             obs["game_completion_fraction"],
@@ -193,7 +194,7 @@ class DeepSetsActorCritic(BaseActorCritic):
             next_card_embeddings,                                           # (B, entity_encoder_out_ch)
         ], dim=-1).to(dtype=t.float32)                                      # (B, trunk_extra_in_ch + 13 * entity_encoder_out_ch) 
 
-        return trunk_input
+        return trunk_input, hand_embeddings
 
 
     def forward(self, obs):
@@ -214,6 +215,8 @@ class DeepSetsActorCritic(BaseActorCritic):
             obs["opponent_cards"], 
             obs["my_crown_towers"], 
             obs["opponent_crown_towers"], 
+            obs["my_hand"],
+            obs["my_next_card"].unsqueeze(1),
         ], dim=1).to(dtype=t.float32)
 
         if not self.disjoint_actor_critic:
@@ -222,11 +225,12 @@ class DeepSetsActorCritic(BaseActorCritic):
             if self.use_attention_over_entities:
                 all_embeddings = self.apply_attention(all_embeddings, all_entities, self.shared_entity_attention, self.shared_attention_norm)
 
-            shared_trunk_input = self.get_trunk_input(obs, all_embeddings, self.shared_entity_encoder)
+            shared_trunk_input, shared_hand_embeddings = self.get_trunk_input(obs, all_embeddings)
             shared_trunk_out   = self.shared_trunk(shared_trunk_input)
 
             critic_head_input  = shared_trunk_out
             actor_heads_inputs = shared_trunk_out
+            actor_hand_embeddings = shared_hand_embeddings
         else:
             critic_embeddings = self.critic_entity_encoder(all_entities)
             actor_embeddings  = self.actor_entity_encoder(all_entities)
@@ -235,8 +239,8 @@ class DeepSetsActorCritic(BaseActorCritic):
                 critic_embeddings = self.apply_attention(critic_embeddings, all_entities, self.critic_entity_attention, self.critic_attention_norm)
                 actor_embeddings  = self.apply_attention(actor_embeddings, all_entities, self.actor_entity_attention, self.actor_attention_norm)
 
-            critic_trunk_input = self.get_trunk_input(obs, critic_embeddings, self.critic_entity_encoder)
-            actor_trunk_input  = self.get_trunk_input(obs, actor_embeddings, self.actor_entity_encoder)
+            critic_trunk_input, _ = self.get_trunk_input(obs, critic_embeddings)
+            actor_trunk_input, actor_hand_embeddings  = self.get_trunk_input(obs, actor_embeddings)
 
             critic_head_input = self.critic_trunk(critic_trunk_input)
             actor_heads_inputs  = self.actor_trunk(actor_trunk_input)
@@ -247,10 +251,7 @@ class DeepSetsActorCritic(BaseActorCritic):
             skip_logits = self.actor_skip_net(actor_heads_inputs).squeeze(-1)  # (B,)
             deck_logits = self.actor_deck_idx_net(actor_heads_inputs)
         else:
-            if self.disjoint_actor_critic:
-                hand_embeddings = self.actor_entity_encoder(obs["my_hand"])
-            else:
-                hand_embeddings = self.shared_entity_encoder(obs["my_hand"])
+            hand_embeddings = actor_hand_embeddings
 
             B = actor_heads_inputs.shape[0]
             skip_embed = self.skip_token.unsqueeze(0).expand(B, -1).unsqueeze(1)

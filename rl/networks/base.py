@@ -174,32 +174,30 @@ class BaseActorCritic(nn.Module):
         skip_dist = t.distributions.Bernoulli(logits=skip_logits)
         deck_dist = t.distributions.Categorical(logits=deck_logits)
 
-        if pos_logits is not None:
-            pos_dist = t.distributions.Categorical(logits=pos_logits)
-
         if action is None:
             action_skip = skip_dist.sample()
             action_deck = deck_dist.sample()
-            
-            # Conditionally computing position logits
-            if pos_logits is None:
-                deck_info = nn.functional.one_hot(action_deck.long(), num_classes=self.num_cards_in_hand).to(dtype=pos_head_input.dtype)
-                pos_logits = self.actor_position_net(
-                    t.cat([pos_head_input, deck_info], dim=-1)
-                )
-
-            if invalid_position_mask is not None:
-                pos_logits = pos_logits.masked_fill(invalid_position_mask, float('-inf'))
-            if self.invalid_position_mask is not None:
-                pos_logits = pos_logits.masked_fill(self.invalid_position_mask, float('-inf'))
-
-            pos_dist  = t.distributions.Categorical(logits=pos_logits)
-
-            action_pos  = pos_dist.sample()
         else:
             action_skip = action["skip"].float()
             action_deck = action["deck_idx"].long()
-            action_pos  = action["position"].long()
+
+        if pos_logits is None:
+            deck_info = nn.functional.one_hot(action_deck.long(), num_classes=self.num_cards_in_hand).to(dtype=pos_head_input.dtype)
+            pos_logits = self.actor_position_net(
+                t.cat([pos_head_input, deck_info], dim=-1)
+            )
+
+        if invalid_position_mask is not None:
+            pos_logits = pos_logits.masked_fill(invalid_position_mask, float('-inf'))
+        if self.invalid_position_mask is not None:
+            pos_logits = pos_logits.masked_fill(self.invalid_position_mask, float('-inf'))
+
+        pos_dist = t.distributions.Categorical(logits=pos_logits)
+
+        if action is None:
+            action_pos = pos_dist.sample()
+        else:
+            action_pos = action["position"].long()
 
         # Log Probs
         skip_log_prob = skip_dist.log_prob(action_skip)
