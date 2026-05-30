@@ -1515,7 +1515,7 @@ if __name__ == "__main__":
     ppo_group.add_argument(
         "--kl_early_stopping",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Enable early stopping based on KL divergence."
     )
     ppo_group.add_argument(
