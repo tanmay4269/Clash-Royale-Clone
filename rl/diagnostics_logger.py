@@ -9,6 +9,13 @@ class DiagnosticsLogger:
         self.cfg = cfg
         self.wandb_logging = wandb_logging
 
+        # Resolve num_cards_in_deck safely to handle Dict configurations or missing key
+        self.num_cards_in_deck = cfg.network.get("num_cards_in_deck")
+        if not isinstance(self.num_cards_in_deck, int):
+            self.num_cards_in_deck = cfg.network.get("num_cards_in_hand")
+            if not isinstance(self.num_cards_in_deck, int):
+                self.num_cards_in_deck = 4
+
         self.reset_episode_stats()
         self.reset_buffer_stats()
 
@@ -92,11 +99,11 @@ class DiagnosticsLogger:
                 log_dict["action_diagnostics/deck_idx_hist"] = wandb.Histogram(self.ep_decks)
                 
                 # Plotly stacked bar chart
-                counts = np.bincount(self.ep_decks, minlength=self.cfg.network.num_cards_in_deck)
+                counts = np.bincount(self.ep_decks, minlength=self.num_cards_in_deck)
                 proportions = counts / max(1, sum(counts))
                 fig = go.Figure(data=[
                     go.Bar(name=f"Card {i}", x=["Deck"], y=[proportions[i]])
-                    for i in range(self.cfg.network.num_cards_in_deck)
+                    for i in range(self.num_cards_in_deck)
                 ])
                 fig.update_layout(barmode='stack', title="Deck Usage Proportions")
                 log_dict["action_diagnostics/deck_stacked_chart"] = wandb.Html(fig.to_html(auto_play=False))
@@ -178,11 +185,11 @@ class DiagnosticsLogger:
             game_diag["game_diagnostics/avg_ep_duration_frames"] = np.mean(self._ep_durations)
         if self._ep_deck_indices:
             game_diag["action_diagnostics/deck_idx_hist"] = wandb.Histogram(self._ep_deck_indices)
-            counts = np.bincount(self._ep_deck_indices, minlength=self.cfg.network.num_cards_in_deck)
+            counts = np.bincount(self._ep_deck_indices, minlength=self.num_cards_in_deck)
             proportions = counts / max(1, sum(counts))
             fig = go.Figure(data=[
                 go.Bar(name=f"Card {i}", x=["Deck"], y=[proportions[i]])
-                for i in range(self.cfg.network.num_cards_in_deck)
+                for i in range(self.num_cards_in_deck)
             ])
             fig.update_layout(barmode='stack', title="Deck Usage Proportions")
             game_diag["action_diagnostics/deck_stacked_chart"] = wandb.Html(fig.to_html(auto_play=False))

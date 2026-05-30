@@ -172,6 +172,7 @@ class Trainer:
         self.cfg.network.trunk_out_ch = 128
         
         self.cfg.network.num_cards_in_hand = self.env.unwrapped.NUM_CARDS_IN_HAND
+        self.cfg.network.num_cards_in_deck = self.env.unwrapped.NUM_CARDS_IN_HAND
         self.cfg.network.max_num_cards = self.max_num_objects
         self.cfg.network.position_space_width = self.arena.width
         self.cfg.network.position_space_height = self.arena.height
