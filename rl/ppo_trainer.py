@@ -44,6 +44,13 @@ class Trainer:
 
         # Network
         network_type='deep_sets',
+        activation_fn='tanh',
+        disjoint_actor_critic=True,
+        use_cnn_position_decoder=True,
+        use_layer_init=True,
+        append_deck_info_to_position_head_input=True,
+        use_attention_over_entities=True,
+        use_pointer_decoder=True,
 
         # Run / Logging
         gym_env_name="ClashRoyaleEnv-v0",
@@ -167,6 +174,15 @@ class Trainer:
 
         self.cfg.network.invalid_position_mask = t.tensor(invalid_position_mask).flatten()
         self.cfg.network.deploy_cost_idx = self.env.flattened_card_space_indices["deploy_cost"][0]
+
+        # CLI Flags
+        self.cfg.network.activation_fn = activation_fn
+        self.cfg.network.disjoint_actor_critic = disjoint_actor_critic
+        self.cfg.network.use_cnn_position_decoder = use_cnn_position_decoder
+        self.cfg.network.use_layer_init = use_layer_init
+        self.cfg.network.append_deck_info_to_position_head_input = append_deck_info_to_position_head_input
+        self.cfg.network.use_attention_over_entities = use_attention_over_entities
+        self.cfg.network.use_pointer_decoder = use_pointer_decoder
 
         # Buffer Related
         self.cfg.buffer.gae_gamma = gae_gamma
@@ -1235,13 +1251,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train PPO for Clash Royale")
 
     # Run / Logging
-    parser.add_argument(
+    run_group = parser.add_argument_group("Run / Logging Settings")
+    run_group.add_argument(
         "--run_name",
         type=str,
         default=None,
         help="Prefix for the run name; date-time will be appended."
     )
-    parser.add_argument(
+    run_group.add_argument(
         "--resume_run",
         type=str,
         default=None,
@@ -1252,7 +1269,7 @@ if __name__ == "__main__":
             "is restored from training_state.pt inside that folder."
         ),
     )
-    parser.add_argument(
+    run_group.add_argument(
         "--save_state_every",
         type=int,
         default=100_000,
@@ -1261,69 +1278,117 @@ if __name__ == "__main__":
     )
 
     # Flags / Mode
-    parser.add_argument(
+    flags_group = parser.add_argument_group("General Flags / Modes")
+    flags_group.add_argument(
         "--use_lr_tuner",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Enable or disable LR tuner."
     )
-    parser.add_argument(
-        "--network_type",
-        type=str,
-        default='deep_sets',
-        choices=['deep_sets_baseline', 'deep_sets', 'pointer', 'attention', 'transformer', 'autoregressive'],
-        help="Network architecture to use."
-    )
-    parser.add_argument(
+    flags_group.add_argument(
         "--overfit_mode",
         type=str,
         default=None,
         choices=['single-buffer', 'fixed-opponent', 'vs-random', 'vs-skip', 'vs-scripted'],
         help="Overfit mode to use."
     )
-    parser.add_argument(
+    flags_group.add_argument(
         "--wandb_logging",
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Enable or disable wandb logging."
     )
-    parser.add_argument(
+    flags_group.add_argument(
         "--debug",
         action="store_true",
         help="Enable debug mode."
     )
-    parser.add_argument(
+    flags_group.add_argument(
         "--profile",
         action="store_true",
         help="Run 2 PPO updates and print detailed timing stats on the 2nd (buffer collection, frame step, GAE, PPO). Exits after."
     )
 
+    # Network Architecture Config Group
+    net_group = parser.add_argument_group("Network Architecture Configuration")
+    net_group.add_argument(
+        "--network_type",
+        type=str,
+        default='deep_sets',
+        choices=['deep_sets', 'transformer'],
+        help="Network architecture to use."
+    )
+    net_group.add_argument(
+        "--activation_fn",
+        type=str,
+        default='tanh',
+        choices=['relu', 'tanh', 'elu'],
+        help="Activation function to use in networks."
+    )
+    net_group.add_argument(
+        "--disjoint_actor_critic",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use disjoint networks for actor and critic."
+    )
+    net_group.add_argument(
+        "--use_cnn_position_decoder",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use CNN position decoder (ConvTranspose2d) instead of Linear."
+    )
+    net_group.add_argument(
+        "--use_layer_init",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use orthogonal weight initialization."
+    )
+    net_group.add_argument(
+        "--append_deck_info_to_position_head_input",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Condition position head on chosen card embedding."
+    )
+    net_group.add_argument(
+        "--use_attention_over_entities",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use multi-head attention layer over entities in DeepSets."
+    )
+    net_group.add_argument(
+        "--use_pointer_decoder",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use pointer scoring mechanism for deck selection."
+    )
+
     # Reward Shaping
-    parser.add_argument(
+    reward_group = parser.add_argument_group("Reward Shaping Configuration")
+    reward_group.add_argument(
         "--gae_gamma",
         type=float,
         default=0.997,
         help="Discount factor (gamma) for GAE."
     )
-    parser.add_argument(
+    reward_group.add_argument(
         "--step_penalty",
         type=float,
         default=0.0,
         help="Penalty applied at each step. A positive value here will add its negative to each step."
     )
-    parser.add_argument(
+    reward_group.add_argument(
         "--tower_damage_reward_scale",
         type=float,
         default=2e-4,
         help="Scale for tower damage reward."
     )
-    parser.add_argument(
+    reward_group.add_argument(
         "--tower_distruction_reward",
         type=float,
         default=0.5,
         help="Reward for destroying a tower."
     )
-    parser.add_argument(
+    reward_group.add_argument(
         "--winning_reward",
         type=float,
         default=5.0,
@@ -1331,7 +1396,8 @@ if __name__ == "__main__":
     )
 
     # Environment
-    parser.add_argument(
+    env_group = parser.add_argument_group("Environment Settings")
+    env_group.add_argument(
         "--num_envs",
         type=int,
         default=8,
@@ -1339,45 +1405,46 @@ if __name__ == "__main__":
     )
 
     # PPO
-    parser.add_argument(
+    ppo_group = parser.add_argument_group("PPO Algorithm Hyperparameters")
+    ppo_group.add_argument(
         "--kl_threshold",
         type=float,
         default=0.01,
         metavar="KL",
         help="Max approximate KL divergence allowed per PPO update. The epoch loop exits early when exceeded. Default: 0.01."
     )
-    parser.add_argument(
+    ppo_group.add_argument(
         "--kl_early_stopping",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Enable early stopping based on KL divergence."
     )
-    parser.add_argument(
+    ppo_group.add_argument(
         "--obs_normalization",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Normalise observations per-minibatch using a running EMA of mean/variance over the state buffer."
     )
-    parser.add_argument(
+    ppo_group.add_argument(
         "--value_normalization",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Normalise return targets before the critic MSE loss using a running EMA of mean/variance (values are denormalised for explained_variance logging)."
     )
-    parser.add_argument(
+    ppo_group.add_argument(
         "--num_ppo_epochs",
         type=int,
         default=6,
         metavar="K",
         help="Number of PPO gradient epochs per rollout (subject to KL early stopping)."
     )
-    parser.add_argument(
+    ppo_group.add_argument(
         "--drop_forced_skips",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Strip forced-skip steps (elixir < cheapest card) from the buffer before the PPO update."
     )
-    parser.add_argument(
+    ppo_group.add_argument(
         "--num_games_in_buffer",
         type=int,
         default=10,
@@ -1385,13 +1452,14 @@ if __name__ == "__main__":
     )
 
     # Optimisation
-    parser.add_argument(
+    opt_group = parser.add_argument_group("Optimization Settings")
+    opt_group.add_argument(
         "--default_lr",
         type=float,
         default=1.5e-4,
         help="Default learning rate (or learning rate after LR tuner if enabled)."
     )
-    parser.add_argument(
+    opt_group.add_argument(
         "--minibatch_size",
         type=int,
         default=2048,
@@ -1403,6 +1471,13 @@ if __name__ == "__main__":
     trainer = Trainer(
         # Network
         network_type=args.network_type,
+        activation_fn=args.activation_fn,
+        disjoint_actor_critic=args.disjoint_actor_critic,
+        use_cnn_position_decoder=args.use_cnn_position_decoder,
+        use_layer_init=args.use_layer_init,
+        append_deck_info_to_position_head_input=args.append_deck_info_to_position_head_input,
+        use_attention_over_entities=args.use_attention_over_entities,
+        use_pointer_decoder=args.use_pointer_decoder,
 
         # Run / Logging
         gym_env_name="ClashRoyaleEnv-v0",
