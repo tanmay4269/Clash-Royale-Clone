@@ -182,9 +182,11 @@ class BaseActorCritic(nn.Module):
             action_deck = action["deck_idx"].long()
 
         if pos_logits is None:
-            deck_info = nn.functional.one_hot(action_deck.long(), num_classes=self.num_cards_in_hand).to(dtype=pos_head_input.dtype)
+            trunk_out, hand_embeddings = pos_head_input
+            B = trunk_out.shape[0]
+            chosen_embed = hand_embeddings[t.arange(B, device=trunk_out.device), action_deck.long()]
             pos_logits = self.actor_position_net(
-                t.cat([pos_head_input, deck_info], dim=-1)
+                t.cat([trunk_out, chosen_embed], dim=-1)
             )
 
         if invalid_position_mask is not None:

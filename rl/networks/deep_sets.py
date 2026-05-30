@@ -148,7 +148,7 @@ class DeepSetsActorCritic(BaseActorCritic):
 
         self.actor_position_net = self.make_position_head(
             use_cnn_position_decoder,
-            trunk_out_ch + (num_cards_in_hand if self.append_deck_info_to_position_head_input else 0), 
+            trunk_out_ch + (entity_encoder_out_ch if self.append_deck_info_to_position_head_input else 0), 
             position_space_width, 
             position_space_height, 
         )
@@ -211,10 +211,10 @@ class DeepSetsActorCritic(BaseActorCritic):
         """
         
         all_entities = t.cat([
-            obs["my_cards"], 
-            obs["opponent_cards"], 
             obs["my_crown_towers"], 
             obs["opponent_crown_towers"], 
+            obs["my_cards"], 
+            obs["opponent_cards"], 
             obs["my_hand"],
             obs["my_next_card"].unsqueeze(1),
         ], dim=1).to(dtype=t.float32)
@@ -264,7 +264,7 @@ class DeepSetsActorCritic(BaseActorCritic):
             deck_logits = card_logits[:, 1:]
 
         if self.append_deck_info_to_position_head_input:
-            return value, skip_logits, deck_logits, None, actor_heads_inputs 
+            return value, skip_logits, deck_logits, None, (actor_heads_inputs, actor_hand_embeddings) 
 
         pos_logits = self.actor_position_net(actor_heads_inputs)
 

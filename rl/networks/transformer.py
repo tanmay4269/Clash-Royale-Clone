@@ -150,7 +150,7 @@ class TransformerActorCritic(BaseActorCritic):
 
         self.actor_position_net = self.make_position_head(
             use_cnn_position_decoder,
-            trunk_out_ch + (num_cards_in_hand if self.append_deck_info_to_position_head_input else 0), 
+            trunk_out_ch + (d_model if self.append_deck_info_to_position_head_input else 0), 
             self.position_space_width, 
             self.position_space_height,
         )
@@ -236,7 +236,7 @@ class TransformerActorCritic(BaseActorCritic):
             deck_logits = card_logits[:, 1:]
 
         if self.append_deck_info_to_position_head_input:
-            return value, skip_logits, deck_logits, None, actor_trunk_out
+            return value, skip_logits, deck_logits, None, (actor_trunk_out, actor_hand_out)
 
         pos_logits = self.actor_position_net(actor_trunk_out)
         return value, skip_logits, deck_logits, pos_logits, None
