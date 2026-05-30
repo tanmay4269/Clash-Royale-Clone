@@ -219,7 +219,7 @@ class Game:
                 entity_encoder_out_ch=32,
                 trunk_extra_in_ch=2,
                 trunk_mid_ch=128,
-                num_cards_in_deck=self._env_raw.unwrapped.NUM_CARDS_IN_DECK,
+                num_cards_in_deck=self._env_raw.unwrapped.NUM_CARDS_IN_HAND,
                 max_num_cards=self.arena.max_num_objects,
                 position_space_width=arena.width,
                 position_space_height=arena.height,

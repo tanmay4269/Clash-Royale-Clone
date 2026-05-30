@@ -102,7 +102,7 @@ class ClashRoyaleEnv(gym.Env):
         })
 
         ### Action Space ###
-        self.NUM_CARDS_IN_DECK = 4
+        self.NUM_CARDS_IN_HAND = 4
         position_space = spaces.Box(  
             low=np.array([0.0, 0.0]),
             high=np.array([
@@ -114,11 +114,11 @@ class ClashRoyaleEnv(gym.Env):
 
         self.action_space = spaces.Dict({
             "player_1_skip": spaces.Discrete(2), # bool
-            "player_1_card_idx": spaces.Discrete(self.NUM_CARDS_IN_DECK),
+            "player_1_card_idx": spaces.Discrete(self.NUM_CARDS_IN_HAND),
             "player_1_card_position": position_space,
 
             "player_2_skip": spaces.Discrete(2), # bool
-            "player_2_card_idx": spaces.Discrete(self.NUM_CARDS_IN_DECK),
+            "player_2_card_idx": spaces.Discrete(self.NUM_CARDS_IN_HAND),
             "player_2_card_position": position_space,
         })
 
