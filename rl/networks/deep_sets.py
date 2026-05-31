@@ -77,6 +77,10 @@ class DeepSetsActorCritic(BaseActorCritic):
                 nn.LayerNorm(entity_encoder_mid_ch),
                 self.activation_layer(),
 
+                self.layer_init(nn.Linear(entity_encoder_mid_ch, entity_encoder_mid_ch)),
+                nn.LayerNorm(entity_encoder_mid_ch),
+                self.activation_layer(),
+
                 self.layer_init(nn.Linear(entity_encoder_mid_ch, entity_encoder_out_ch)),
                 nn.LayerNorm(entity_encoder_out_ch),
                 self.activation_layer(),
