@@ -63,23 +63,11 @@ class TransformerActorCritic(BaseActorCritic):
         num_segments=4,
 
         activation_fn='tanh',
-        
-        # disjoint_actor_critic=False,
         disjoint_actor_critic=True,
-
-        # use_layer_init=False,
         use_layer_init=True,
-         
-        # use_cnn_position_decoder=False,
         use_cnn_position_decoder=True,
-
-        # use_learned_temperature=False,
         use_learned_temperature=True,
-
-        # append_deck_info_to_position_head_input=False,
         append_deck_info_to_position_head_input=True,
-
-        # use_pointer_decoder=False,
         use_pointer_decoder=True,
         
         num_cards_in_hand=4,

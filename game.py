@@ -156,7 +156,7 @@ def apply_action_to_arena(arena, joined_action):
 
 
 class Game:
-    def __init__(self, opponent_mode: str = "random", player_mode: str = "manual", network_type: str = "deep_sets"):
+    def __init__(self, opponent_mode: str = "random", player_mode: str = "manual", network_type: str = "deep_sets", record_video: bool = False):
         self._network_type = network_type
         self._env_raw  = gym.make("ClashRoyaleEnv-v0")
         self._env_wrap = CRFlattenNormWrapper(self._env_raw)
@@ -193,6 +193,32 @@ class Game:
 
         self.arena._debug_active_player = 1
         self.arena._debug_active_card   = Knight
+
+        # Video recording setup
+        self.video_writer = None
+        self.video_path = None
+        if record_video:
+            try:
+                import cv2
+                from datetime import datetime
+                os.makedirs("runs/00-manual_gameplays", exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+                self.video_path = f"runs/00-manual_gameplays/{timestamp}.mp4"
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                self.video_writer = cv2.VideoWriter(
+                    self.video_path,
+                    fourcc,
+                    60.0,
+                    (self.window_width, self.window_height)
+                )
+                if not self.video_writer.isOpened():
+                    print(f"Error: Could not open VideoWriter for {self.video_path}")
+                    self.video_writer = None
+                else:
+                    print(f"Video recording started: saving to {self.video_path}")
+            except Exception as e:
+                print(f"Failed to initialize video recording: {e}")
+                self.video_writer = None
 
         # Set default active card index to 0
         self.arena.player_side_1.active_card_idx = 0
@@ -410,6 +436,16 @@ class Game:
 
         self.screen.fill((24, 24, 28))
         self.arena.render(self.screen, scale_factor=self.scale_factor)
+
+        if self.video_writer is not None:
+            try:
+                import cv2
+                frame = pygame.surfarray.array3d(self.screen)
+                frame = np.transpose(frame, (1, 0, 2))
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                self.video_writer.write(frame)
+            except Exception as e:
+                print(f"Error recording frame: {e}")
         obs_wrapped = self._get_obs_wrapped()
         action_2    = self._player_2_bot_action(obs_wrapped)
 
@@ -449,9 +485,17 @@ class Game:
             print(f"FPS: {self.clock.get_fps():.2f}\t RAM: {memory/1024/1024:.2f} MB")
 
     def run(self):
-        while self.running:
-            self.update()
-        pygame.quit()
+        try:
+            while self.running:
+                self.update()
+        finally:
+            pygame.quit()
+            if self.video_writer is not None:
+                try:
+                    self.video_writer.release()
+                    print(f"Video saved to {self.video_path}")
+                except Exception as e:
+                    print(f"Error releasing VideoWriter: {e}")
 
 
 if __name__ == "__main__":
@@ -475,7 +519,17 @@ if __name__ == "__main__":
         choices=['deep_sets_baseline', 'deep_sets', 'pointer', 'attention', 'transformer', 'autoregressive'],
         help="Network architecture (must match checkpoint)."
     )
+    parser.add_argument(
+        "--record_video",
+        action="store_true",
+        help="Record manual gameplay and save to runs/00-manual_gameplays/datetime.mp4"
+    )
     args = parser.parse_args()
 
-    game = Game(opponent_mode=args.opponent, player_mode=args.player_mode, network_type=args.network_type)
+    game = Game(
+        opponent_mode=args.opponent,
+        player_mode=args.player_mode,
+        network_type=args.network_type,
+        record_video=args.record_video
+    )
     game.run()

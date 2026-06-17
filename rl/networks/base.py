@@ -10,16 +10,9 @@ class BaseActorCritic(nn.Module):
     def __init__(
         self,
 
-        # activation_fn='relu',
         activation_fn='tanh',
-
-        # use_layer_init=False,
         use_layer_init=True,
-
-        # use_cnn_position_decoder=False,
         use_cnn_position_decoder=True,
-
-        # use_learned_temperature=False,
         use_learned_temperature=True,
 
         num_cards_in_hand=4,

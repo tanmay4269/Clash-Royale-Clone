@@ -16,28 +16,13 @@ class DeepSetsActorCritic(BaseActorCritic):
         trunk_extra_in_ch,
         trunk_out_ch,
 
-        # activation_fn='relu',
         activation_fn='tanh',
-        
-        # disjoint_actor_critic=False,
         disjoint_actor_critic=True,
-        
-        # use_cnn_position_decoder=False,
         use_cnn_position_decoder=True,
-        
-        # use_layer_init=False,
         use_layer_init=True,
-
-        # use_learned_temperature=False,
         use_learned_temperature=True,
-        
-        # append_deck_info_to_position_head_input=False,
         append_deck_info_to_position_head_input=True,
-
-        # use_attention_over_entities=False,
         use_attention_over_entities=True,
-
-        # use_pointer_decoder=False,
         use_pointer_decoder=True,
 
         num_cards_in_hand=4,
