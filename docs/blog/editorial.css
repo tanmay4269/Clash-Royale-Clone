@@ -601,6 +601,92 @@ body:has(.media-lightbox[open]) {
 	overflow: hidden;
 }
 
+.revision-block {
+	margin: 2rem 0 3rem;
+	padding: 1.35rem 1.45rem;
+	border: 1px solid #d5b878;
+	border-left: 5px solid #b46a23;
+	border-radius: 0 12px 12px 0;
+	background:
+		linear-gradient(135deg, rgba(255, 249, 230, 0.96), rgba(249, 240, 215, 0.82));
+	color: #3a3023;
+	box-shadow: 0 10px 30px rgba(80, 55, 20, 0.07);
+	font-family: var(--heading-font, ui-sans-serif, system-ui, sans-serif);
+	font-size: 0.88em;
+	line-height: 1.58;
+}
+
+.revision-block-header {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-bottom: 0.85rem;
+}
+
+.revision-block-label {
+	margin: 0;
+	color: #98551d;
+	font-size: 0.7rem;
+	font-weight: 800;
+	letter-spacing: 0.11em;
+	text-transform: uppercase;
+}
+
+.revision-block-context {
+	margin: 0;
+	color: #88745c;
+	font-size: 0.7rem;
+}
+
+.revision-block h4 {
+	margin: 1.15rem 0 0.45rem;
+	color: #49331f;
+	font-size: 0.95rem;
+	font-weight: 760;
+	letter-spacing: -0.01em;
+}
+
+.revision-block h4:first-of-type {
+	margin-top: 0;
+}
+
+.revision-block p {
+	margin: 0.55rem 0;
+}
+
+.revision-block ul,
+.revision-block ol {
+	margin: 0.45rem 0 0.7rem;
+	padding-left: 1.25rem;
+}
+
+.revision-block li {
+	margin: 0.34rem 0;
+	padding-left: 0.15rem;
+}
+
+.revision-block code {
+	background: rgba(111, 72, 24, 0.1);
+	color: #6f421b;
+}
+
+.revision-block strong {
+	color: #382719;
+}
+
+.revision-block .revision-status {
+	display: inline-block;
+	margin-right: 0.25rem;
+	padding: 0.08rem 0.38rem;
+	border-radius: 999px;
+	background: rgba(180, 106, 35, 0.12);
+	color: #8a4b18;
+	font-size: 0.72em;
+	font-weight: 760;
+	vertical-align: 0.05em;
+}
+
 @media (min-width: 1040px) {
 	.page-body > div > figure:not(.image),
 	.page-body > div > figure.image {
