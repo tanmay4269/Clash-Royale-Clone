@@ -1,14 +1,14 @@
 \documentclass[tikz,border=10pt]{standalone}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
-\usetikzlibrary{arrows.meta, positioning}
+\usetikzlibrary{arrows.meta, positioning, fit}
 
 \definecolor{ink}{HTML}{334155}
 \definecolor{inputbg}{HTML}{F8FAFC}
 \definecolor{sharedbg}{HTML}{EFF6FF}
 \definecolor{actorbg}{HTML}{EEF2FF}
 \definecolor{criticbg}{HTML}{ECFDF5}
-\definecolor{tokenbg}{HTML}{FFF7ED}
+\definecolor{pointerbg}{HTML}{FFF7ED}
 \definecolor{outputbg}{HTML}{FEFCE8}
 
 \tikzset{
@@ -20,125 +20,137 @@
     inner sep=7pt,
     font=\sffamily\small
   },
-  input/.style={box, fill=inputbg, align=center, text width=55mm},
-  process/.style={box, fill=sharedbg, align=center, text width=48mm},
-  actor/.style={box, fill=actorbg, align=center, text width=50mm},
-  critic/.style={box, fill=criticbg, align=center, text width=50mm},
-  token/.style={box, fill=tokenbg, align=center, text width=52mm},
+  input/.style={box, fill=inputbg, text width=55mm},
+  process/.style={box, fill=sharedbg, align=center, text width=43mm},
+  actor/.style={box, fill=actorbg, align=center, text width=47mm},
+  critic/.style={box, fill=criticbg, align=center, text width=47mm},
+  pointer/.style={box, fill=pointerbg, text width=55mm},
   output/.style={box, fill=outputbg, align=center, minimum width=31mm},
-  note/.style={box, fill=inputbg, text width=52mm, font=\sffamily\footnotesize},
+  note/.style={box, fill=inputbg, text width=49mm, font=\sffamily\footnotesize},
   arrow/.style={-{Latex[length=2.5mm]}, line width=0.8pt, draw=ink}
 }
 
 \begin{document}
-\begin{tikzpicture}[node distance=11mm and 16mm]
+\begin{tikzpicture}[node distance=11mm and 15mm]
 
-\node[input] (entities) {
-  \textbf{entity features}\\[2pt]
-  six towers $(B,6,26)$\\
+\node[input, align=center] (obs) {
+  \textbf{observation}\\[2pt]
   two deployed sets $(B,32,26)$\\
-  hand $(B,4,26)$ and next card $(B,1,26)$
+  six towers $(B,3,26)$\\
+  per side hand $(B,4,26)$\\
+  next card $(B,1,26)$\\
+  game completion and elixir scalars
 };
 
-\node[input, right=of entities] (meta) {
-  \textbf{meta features}\\[2pt]
-  game completion fraction $(B,1)$\\
-  elixir $(B,1)$
-};
-
-\node[process, below=of entities] (projection) {
-  \textbf{entity projection}\\
-  shared linear map $26\to64$\\
-  75 entity tokens $(B,75,64)$
-};
-
-\node[process, below=of meta] (metaproj) {
-  \textbf{meta projection}\\
-  concatenate, Linear, Tanh\\
-  $(B,2)\to(B,64)$
-};
-
-\node[token, below right=15mm and -18mm of projection] (sequence) {
-  \textbf{token sequence $(B,76,64)$}\\
-  meta projection + learned CLS token\\
-  six towers, 64 deployed slots\\
-  four hand tokens, one next-card token
-};
-
-\node[token, below=of sequence] (segments) {
-  \textbf{token identity and padding}\\
-  add CLS, tower, deployed, hand/next segments\\
-  mask zero-padded deployed slots
-};
-
-\node[process, below=of segments] (split) {
-  \textbf{two independent Transformer paths}\\
+\node[process, below=of obs] (split) {
+  \textbf{two independent paths}\\
   actor and critic each receive\\
-  the complete token sequence
+  the complete observation
 };
 
 \node[actor, below left=12mm and 13mm of split] (actorenc) {
-  \textbf{actor Transformer encoder}\\
-  two pre-LayerNorm blocks\\
-  4-head bidirectional attention\\
-  feed-forward width 256, zero dropout
+  \textbf{actor token sequence}\\
+  entities: Linear $26\to64$\\
+  meta projection + learned CLS\\
+  segment embeddings + padding mask
 };
 
 \node[critic, below right=12mm and 13mm of split] (criticenc) {
-  \textbf{critic Transformer encoder}\\
+  \textbf{critic token sequence}\\
+  entities: Linear $26\to64$\\
+  meta projection + learned CLS\\
+  segment embeddings + padding mask
+};
+
+\node[actor, below=of actorenc] (actortransformer) {
+  \textbf{actor Transformer}\\
   two pre-LayerNorm blocks\\
   4-head bidirectional attention\\
-  feed-forward width 256, zero dropout
+  FFN width 256, zero dropout
 };
 
-\node[actor, below=of actorenc] (actorout) {
+\node[critic, below=of criticenc] (critictransformer) {
+  \textbf{critic Transformer}\\
+  two pre-LayerNorm blocks\\
+  4-head bidirectional attention\\
+  FFN width 256, zero dropout
+};
+
+\node[actor, below=of actortransformer] (actortrunk) {
   \textbf{actor outputs}\\
-  contextual CLS token $(B,64)$\\
-  contextual hand tokens $(B,4,64)$
+  CLS $\to$ MLP: $64\to128\to128$\\
+  four contextual hand tokens $(B,4,64)$
 };
 
-\node[critic, below=of criticenc] (criticout) {
+\node[critic, below=of critictransformer] (critictrunk) {
   \textbf{critic output}\\
-  contextual CLS token $(B,64)$
+  CLS $\to$ MLP: $64\to128\to128$
 };
 
-\node[actor, below=of actorout] (actorpost) {
-  \textbf{actor post-Transformer MLP}\\
-  CLS: $64\to128\to128$\\
-  global actor state $(B,128)$
-};
-
-\node[critic, below=of criticout] (criticpost) {
-  \textbf{critic post-Transformer MLP}\\
-  CLS: $64\to128\to128$\\
-  global critic state $(B,128)$
-};
-
-\node[output, below=of criticpost] (value) {
+\node[output, below=of critictrunk] (value) {
   value
 };
 
-\node[note, below=of actorpost] (sharedheads) {
-  \textbf{same downstream heads as Deep Sets}\\
-  pointer decoder uses the contextual hand tokens,\\
-  selected card conditions the CNN position decoder,\\
-  masking, temperatures and initialization are unchanged
+\node[pointer, below left=13mm and 9mm of actortrunk] (candidates) {
+  \textbf{pointer candidates}\\
+  learned skip token\\
+  + four contextual hand tokens $(B,5,64)$
 };
 
-\draw[arrow] (entities) -- (projection);
-\draw[arrow] (meta) -- (metaproj);
-\draw[arrow] (projection) -- (sequence);
-\draw[arrow] (metaproj) -- (sequence);
-\draw[arrow] (sequence) -- (segments);
-\draw[arrow] (segments) -- (split);
+\node[pointer, below right=13mm and 9mm of actortrunk] (query) {
+  \textbf{state query}\\
+  actor CLS state $\to$ linear projection\\
+  $(B,128)\to(B,64)$
+};
+
+\node[pointer, below=45mm of actortrunk] (scores) {
+  \textbf{candidate scores}\\
+  query-candidate dot products $(B,5)$\\
+  skip logit + four card logits
+};
+
+\node[actor, below=of scores] (condition) {
+  \textbf{card-conditioned state}\\
+  actor CLS state\\
+  + selected contextual hand token\\
+  $(B,128)+(B,64)=(B,192)$
+};
+
+\node[actor, below=of condition] (cnn) {
+  \textbf{CNN position decoder}\\
+  transposed convolutions\\
+  $(B,192)\to(B,18\times32)$
+};
+
+\node[output, below=of cnn] (position) {
+  position logits
+};
+
+\node[note, below=of value] (shared) {
+  \textbf{same supporting choices as DeepSets}\\
+  disjoint actor-critic paths,\\
+  action masking,\\
+  learned temperatures,\\
+  orthogonal initialization,\\
+  linear and shared-network fallback switches
+};
+
+\draw[arrow] (obs) -- (split);
 \draw[arrow] (split) -- (actorenc);
 \draw[arrow] (split) -- (criticenc);
-\draw[arrow] (actorenc) -- (actorout);
-\draw[arrow] (criticenc) -- (criticout);
-\draw[arrow] (actorout) -- (actorpost);
-\draw[arrow] (criticout) -- (criticpost);
-\draw[arrow] (criticpost) -- (value);
-\draw[arrow] (actorpost) -- (sharedheads);
+\draw[arrow] (actorenc) -- (actortransformer);
+\draw[arrow] (criticenc) -- (critictransformer);
+\draw[arrow] (actortransformer) -- (actortrunk);
+\draw[arrow] (critictransformer) -- (critictrunk);
+\draw[arrow] (critictrunk) -- (value);
+\draw[arrow] (actortrunk) -- (query);
+\draw[arrow] (actortrunk) -- (candidates);
+\draw[arrow] (query) -- (scores);
+\draw[arrow] (candidates) -- node[left, font=\sffamily\tiny] {hand tokens} (scores);
+\draw[arrow] (actortrunk.east) -- ++(8mm,0) |- (condition.east);
+\draw[arrow] (scores) -- node[right, font=\sffamily\tiny] {sampled card} (condition);
+\draw[arrow] (condition) -- (cnn);
+\draw[arrow] (cnn) -- (position);
 
 \end{tikzpicture}
 \end{document}
