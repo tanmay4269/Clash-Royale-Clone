@@ -1,0 +1,44 @@
+/*
+ * Blog appearance controls.
+ * Change these values without editing editorial.css.
+ */
+:root {
+	/* Maximum width of the article's text column on desktop. */
+	--content-width: 960px;
+
+	/* Minimum combined horizontal breathing room around the article. */
+	--content-side-gap: 48px;
+
+	/* Normal paragraph and list text size. */
+	--body-font-size: 1.18rem;
+
+	/* Vertical spacing between lines of normal article text. */
+	--body-line-height: 1.72;
+
+	/* Maximum width of the large article title. */
+	--title-max-width: 900px;
+
+	/* Maximum width allowed for images and other wide media. */
+	--media-max-width: 1080px;
+
+	/* Maximum video height while embedded inside the article. */
+	--inline-video-height: 520px;
+
+	/* Maximum video height after opening the popup. */
+	--popup-video-height: 1200px;
+
+	/* Width of the left-side article outline on desktop. */
+	--outline-width: 190px;
+
+	/* Horizontal space between the outline and article. */
+	--outline-gap: 28px;
+
+	/* Distance from the top of the window to the sticky outline. */
+	--outline-top: 110px;
+
+	/* Font stack used for paragraphs and other article prose. */
+	--body-font: Georgia, "Times New Roman", serif;
+
+	/* Font stack used for headings, navigation, tables and UI controls. */
+	--heading-font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}

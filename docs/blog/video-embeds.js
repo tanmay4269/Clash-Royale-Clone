@@ -1,21 +1,139 @@
 document.addEventListener("DOMContentLoaded", () => {
+	const lightbox = document.createElement("dialog");
+	const lightboxShell = document.createElement("div");
+	const lightboxContent = document.createElement("div");
+	const lightboxClose = document.createElement("button");
+
+	lightbox.className = "media-lightbox";
+	lightboxShell.className = "media-lightbox-shell";
+	lightboxContent.className = "media-lightbox-content";
+	lightboxClose.className = "media-lightbox-close";
+	lightboxClose.type = "button";
+	lightboxClose.setAttribute("aria-label", "Close media");
+	lightboxClose.textContent = "×";
+	lightboxShell.append(lightboxContent, lightboxClose);
+	lightbox.appendChild(lightboxShell);
+	document.body.appendChild(lightbox);
+
+	const closeLightbox = () => {
+		lightbox.close();
+		lightboxContent.replaceChildren();
+	};
+
+	const openLightbox = (media) => {
+		lightboxContent.replaceChildren(media);
+		lightbox.showModal();
+	};
+
+	lightboxClose.addEventListener("click", closeLightbox);
+	lightbox.addEventListener("click", (event) => {
+		if (event.target === lightbox || event.target === lightboxShell) {
+			closeLightbox();
+		}
+	});
+	lightbox.addEventListener("close", () => lightboxContent.replaceChildren());
+
+	const progress = document.createElement("div");
+	const progressFill = document.createElement("span");
+	progress.className = "reading-progress";
+	progress.setAttribute("aria-hidden", "true");
+	progress.appendChild(progressFill);
+	document.body.prepend(progress);
+
+	const updateProgress = () => {
+		const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+		const ratio = scrollable > 0 ? window.scrollY / scrollable : 0;
+		progressFill.style.transform = `scaleX(${Math.min(1, Math.max(0, ratio))})`;
+	};
+
+	window.addEventListener("scroll", updateProgress, { passive: true });
+	window.addEventListener("resize", updateProgress);
+	updateProgress();
+
+	const skippableDetails = document.querySelectorAll("details");
+	for (const details of skippableDetails) {
+		const summary = details.querySelector(":scope > summary");
+		if (summary?.textContent.toLowerCase().includes("feel free to skip")) {
+			details.open = false;
+		}
+	}
+
+	const headings = Array.from(document.querySelectorAll(".page-body h1, .page-body h2"));
+	if (headings.length > 0) {
+		const outline = document.createElement("nav");
+		const outlineTitle = document.createElement("p");
+		const outlineLinks = new Map();
+
+		outline.className = "article-outline";
+		outline.setAttribute("aria-label", "Article outline");
+		outlineTitle.className = "article-outline-title";
+		outlineTitle.textContent = "On this page";
+		outline.appendChild(outlineTitle);
+
+		for (const [index, heading] of headings.entries()) {
+			if (!heading.id) {
+				heading.id = `section-${index + 1}`;
+			}
+
+			const link = document.createElement("a");
+			link.href = `#${heading.id}`;
+			link.textContent = heading.textContent.trim();
+			link.dataset.level = heading.tagName === "H1" ? "1" : "2";
+			outline.appendChild(link);
+			outlineLinks.set(heading, link);
+		}
+
+		document.body.appendChild(outline);
+
+		const setActiveHeading = () => {
+			let activeHeading = headings[0];
+			for (const heading of headings) {
+				if (heading.getBoundingClientRect().top <= 150) {
+					activeHeading = heading;
+				} else {
+					break;
+				}
+			}
+
+			for (const [heading, link] of outlineLinks) {
+				link.classList.toggle("is-active", heading === activeHeading);
+			}
+		};
+
+		window.addEventListener("scroll", setActiveHeading, { passive: true });
+		window.addEventListener("resize", setActiveHeading);
+		setActiveHeading();
+	}
+
 	const videoLinks = document.querySelectorAll('figure .source a[href$=".mp4"]');
 	const youtubeLinks = document.querySelectorAll(
 		'figure .source a[href*="youtube.com/watch"], figure .source a[href*="youtu.be/"]',
 	);
 
 	for (const link of videoLinks) {
+		const frame = document.createElement("div");
 		const video = document.createElement("video");
+		const expand = document.createElement("button");
+		frame.className = "media-frame";
 		video.controls = true;
 		video.preload = "metadata";
 		video.playsInline = true;
 		video.src = link.href;
-		video.style.display = "block";
-		video.style.width = "100%";
-		video.style.maxWidth = "720px";
-		video.style.margin = "0 auto";
+		video.className = "local-video";
+		expand.className = "media-expand-button";
+		expand.type = "button";
+		expand.setAttribute("aria-label", "Open video");
+		expand.addEventListener("click", () => {
+			const modalVideo = document.createElement("video");
+			modalVideo.src = video.src;
+			modalVideo.controls = true;
+			modalVideo.autoplay = true;
+			modalVideo.playsInline = true;
+			openLightbox(modalVideo);
+		});
 
-		link.parentElement.replaceWith(video);
+		frame.append(video, expand);
+		link.parentElement.replaceWith(frame);
 	}
 
 	for (const link of youtubeLinks) {
@@ -29,11 +147,8 @@ document.addEventListener("DOMContentLoaded", () => {
 		}
 
 		const container = document.createElement("div");
-		container.style.position = "relative";
-		container.style.width = "100%";
-		container.style.maxWidth = "720px";
-		container.style.aspectRatio = "16 / 9";
-		container.style.margin = "0 auto";
+		const expand = document.createElement("button");
+		container.className = "youtube-embed";
 
 		const iframe = document.createElement("iframe");
 		iframe.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}`;
@@ -43,8 +158,55 @@ document.addEventListener("DOMContentLoaded", () => {
 		iframe.style.width = "100%";
 		iframe.style.height = "100%";
 		iframe.style.border = "0";
+		expand.className = "media-expand-button";
+		expand.type = "button";
+		expand.setAttribute("aria-label", "Open YouTube video");
+		expand.addEventListener("click", () => {
+			const modalIframe = iframe.cloneNode();
+			modalIframe.src = `${iframe.src}?autoplay=1`;
+			modalIframe.allow = iframe.allow;
+			modalIframe.allowFullscreen = true;
+			openLightbox(modalIframe);
+		});
 
-		container.appendChild(iframe);
+		container.append(iframe, expand);
 		link.parentElement.replaceWith(container);
+	}
+
+	const tables = document.querySelectorAll("article table");
+	for (const table of tables) {
+		if (table.parentElement?.classList.contains("table-scroll")) {
+			continue;
+		}
+
+		const wrapper = document.createElement("div");
+		wrapper.className = "table-scroll";
+		table.before(wrapper);
+		wrapper.appendChild(table);
+	}
+
+	const images = document.querySelectorAll("article figure.image img");
+	for (const image of images) {
+		const link = image.closest("a");
+		const openImage = (event) => {
+			event.preventDefault();
+			const modalImage = document.createElement("img");
+			modalImage.src = link?.href || image.currentSrc || image.src;
+			modalImage.alt = image.alt;
+			openLightbox(modalImage);
+		};
+
+		if (link) {
+			link.addEventListener("click", openImage);
+		} else {
+			image.tabIndex = 0;
+			image.setAttribute("role", "button");
+			image.addEventListener("click", openImage);
+			image.addEventListener("keydown", (event) => {
+				if (event.key === "Enter" || event.key === " ") {
+					openImage(event);
+				}
+			});
+		}
 	}
 });
