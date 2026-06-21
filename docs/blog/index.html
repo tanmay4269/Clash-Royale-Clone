@@ -2133,11 +2133,9 @@
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="371aa1bf-7b79-80ad-a1a6-c7b65296171f" class="bulleted-list">
-					<li style="list-style-type:disc">(Optional) <strong>Step penalty</strong>: each step during the
+					<li style="list-style-type:disc"><strong>Step penalty</strong>: each step during the
 						game, inflicting a small negative reward is generally done to encourage ending the game sooner.
-						The evidence here was mixed: run 13 was slightly worse, while run 19 improved some curves but
-						did not materially change the termination-to-truncation ratio. The default remains
-						<code>0.0</code>.</li>
+					</li>
 				</ul>
 			</div>
 			<div style="display:contents" dir="auto">
@@ -2362,7 +2360,7 @@
 					tiebreaker selects a winner. A true draw receives no terminal bonus.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p><strong>Step-penalty evidence is inconclusive:</strong> run 13 was slightly worse, while run 19
+				<p><strong>Step-penalty evidence is inconclusive:</strong> <a href="#386aa1bf-7b79-8041-a8ce-dc40c0f31a46">run 13</a> was slightly worse, while <a href="#386aa1bf-7b79-80fb-8c68-c51542e447e9">run 19</a>
 					improved some curves but did not materially change the termination-to-truncation ratio. The default
 					therefore remains <code>0.0</code>.</p>
 			</div>
@@ -3362,8 +3360,8 @@ Outputs
 			</div>
 			<div style="display:contents" dir="auto">
 				<h4>Deep Sets and Transformer training logs</h4>
-				<p>The recorded dashboard below compares the complete 10 million-step run 30 Deep Sets model with the
-					run 31 Transformer. Only the exported dashboard image is available locally, not the underlying
+				<p>The recorded dashboard below compares the complete 10 million-step <a href="#386aa1bf-7b79-806f-a831-df97cdbff596">run 30</a> Deep Sets model with the
+					<a href="#386aa1bf-7b79-80e3-812e-e9d67b54c853">run 31</a> Transformer. Only the exported dashboard image is available locally, not the underlying
 					history, so exact windowed statistics cannot be recomputed.</p>
 			</div>
 			<div style="display:contents" dir="ltr">
@@ -3534,8 +3532,8 @@ Outputs
 							<td>Full reward plus step penalty</td>
 							<td>Full reward with the per-step penalty enabled.</td>
 							<td>Tests whether encouraging shorter games increases decisive wins or distorts play.</td>
-							<td><strong>TODO</strong>. Existing evidence is inconclusive: run 13 was slightly worse,
-								while run 19 did not materially change termination versus truncation.</td>
+							<td><strong>TODO</strong>. Existing evidence is inconclusive: <a href="#386aa1bf-7b79-8041-a8ce-dc40c0f31a46">run 13</a> was slightly worse,
+								while <a href="#386aa1bf-7b79-80fb-8c68-c51542e447e9">run 19</a> did not materially change termination versus truncation.</td>
 						</tr>
 					</tbody>
 				</table>
@@ -3586,14 +3584,14 @@ Outputs
 							<td>Pointer decoder</td>
 							<td>Linear skip and card heads versus pointer scoring over the available hand.</td>
 							<td>Does card-content-based selection outperform fixed hand-slot logits?</td>
-							<td><strong>TODO</strong>. Run 28 appeared worse than run 27, but it was not a controlled,
+							<td><strong>TODO</strong>. <a href="#386aa1bf-7b79-8097-82fb-deb6e383f50d">Run 28</a> appeared worse than <a href="#386aa1bf-7b79-80d2-a832-f9548b43dca8">run 27</a>, but it was not a controlled,
 								multi-seed or head-to-head comparison.</td>
 						</tr>
 						<tr>
 							<td>Entity attention</td>
 							<td>Deep Sets without attention versus one entity self-attention layer.</td>
 							<td>Does contextualizing entities before pooling improve strength?</td>
-							<td><strong>TODO</strong>. Run 30 appeared stronger than run 27 from training curves, but
+							<td><strong>TODO</strong>. <a href="#386aa1bf-7b79-806f-a831-df97cdbff596">Run 30</a> appeared stronger than <a href="#386aa1bf-7b79-80d2-a832-f9548b43dca8">run 27</a> from training curves, but
 								the checkpoints were not evaluated directly.</td>
 						</tr>
 						<tr>
@@ -3628,21 +3626,21 @@ Outputs
 							<td>Discount factor</td>
 							<td><code>γ = 0.99</code> versus <code>γ = 0.997</code>.</td>
 							<td>Does the longer effective horizon improve long-term credit assignment?</td>
-							<td><strong>TODO</strong> controlled rerun. Run 12 showed a substantial improvement with
+							<td><strong>TODO</strong> controlled rerun. <a href="#386aa1bf-7b79-8097-89a5-f5afafc0c3b8">Run 12</a> showed a substantial improvement with
 								<code>0.997</code> against the scripted bot.</td>
 						</tr>
 						<tr>
 							<td>Minibatch size</td>
 							<td><code>2,048</code> versus <code>256</code>.</td>
 							<td>Do smaller, noisier gradient batches improve optimization?</td>
-							<td><strong>TODO</strong> controlled rerun. Run 22 improved over the run-16 family with
+							<td><strong>TODO</strong> controlled rerun. <a href="#386aa1bf-7b79-808c-8b63-ed87127d89a7">Run 22</a> improved over the <a href="#386aa1bf-7b79-80b4-8a3c-f21ed4340ec7">run-16</a> family with
 								minibatch size <code>256</code>.</td>
 						</tr>
 						<tr>
 							<td>KL early stopping</td>
 							<td>Disabled versus threshold <code>0.01</code>.</td>
 							<td>Does limiting policy movement improve stability or underuse each rollout?</td>
-							<td><strong>TODO</strong> controlled rerun. Run 17 underperformed run 16; run 21 also failed
+							<td><strong>TODO</strong> controlled rerun. <a href="#386aa1bf-7b79-8070-abcd-d12a007daad8">Run 17</a> underperformed <a href="#386aa1bf-7b79-80b4-8a3c-f21ed4340ec7">run 16</a>; <a href="#386aa1bf-7b79-80cb-be91-e79236cb8187">run 21</a> also failed
 								after increasing maximum epochs.</td>
 						</tr>
 						<tr>
@@ -3657,20 +3655,20 @@ Outputs
 							<td>Allow all card actions versus mask unaffordable cards and force skip when necessary.</td>
 							<td>How much does removing impossible actions improve exploration and policy learning?</td>
 							<td><strong>TODO</strong> controlled rerun. The masking change produced the largest recorded
-								behavioral improvement in run 16.</td>
+								behavioral improvement in <a href="#386aa1bf-7b79-80b4-8a3c-f21ed4340ec7">run 16</a>.</td>
 						</tr>
 						<tr>
 							<td>Forced-skip removal</td>
 							<td>Keep versus remove transitions where no card is affordable.</td>
 							<td>Does removing non-choice steps help the actor more than it harms value learning?</td>
-							<td><strong>TODO</strong>. Run 20 performed poorly, but forced-skip removal was bundled with
+							<td><strong>TODO</strong>. <a href="#386aa1bf-7b79-80b4-af8f-eb89ef110eae">Run 20</a> performed poorly, but forced-skip removal was bundled with
 								a 100-game rollout.</td>
 						</tr>
 						<tr>
 							<td>Rollout length</td>
 							<td>Vary games collected per PPO update.</td>
 							<td>What balance of data diversity, update frequency and early-data waste works best?</td>
-							<td><strong>TODO</strong>. Run 20's 100-game rollout performed poorly, but it also enabled
+							<td><strong>TODO</strong>. <a href="#386aa1bf-7b79-80b4-af8f-eb89ef110eae">Run 20</a>'s 100-game rollout performed poorly, but it also enabled
 								forced-skip removal.</td>
 						</tr>
 					</tbody>
@@ -3682,7 +3680,7 @@ Outputs
 					component at a time and train at least three seeds per variant. Freeze the final checkpoints, then
 					evaluate the ablated variant and baseline in the same Elo pool with equal games and both player-side
 					assignments. Report mean and uncertainty across seeds.</p>
-				<p>Prioritize the bundled run-25 to run-26 changes, then the pointer decoder, entity attention and
+				<p>Prioritize the bundled <a href="#386aa1bf-7b79-8012-b033-fe351e8b2cc8">run-25</a> to <a href="#386aa1bf-7b79-80a4-9014-da2c8129c206">run-26</a> changes, then the pointer decoder, entity attention and
 					Deep Sets versus Transformer comparisons. Training curves alone do not complete a TODO.</p>
 			</div>
 			<div style="display:contents" dir="auto">
@@ -12460,7 +12458,7 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 					<li style="list-style-type:disc">Run 17: run 16 with approximate KL early stopping.<div
 							style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8051-a400-fc7ad5281068" class="bulleted-list">
-								<li style="list-style-type:circle">Performed worse than run 16.</li>
+								<li style="list-style-type:circle">Performed worse than <a href="#386aa1bf-7b79-80b4-8a3c-f21ed4340ec7">run 16</a>.</li>
 							</ul>
 						</div>
 					</li>
@@ -12493,7 +12491,7 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-80b4-af8f-eb89ef110eae" class="bulleted-list">
 					<li style="list-style-type:disc">Run 20: run 16 with 100 games per rollout and forced-skip
-						transitions removed, leaving roughly 7,000 samples, similar to run 16.<div style="display:contents"
+						transitions removed, leaving roughly 7,000 samples, similar to <a href="#386aa1bf-7b79-80b4-8a3c-f21ed4340ec7">run 16</a>.<div style="display:contents"
 							dir="auto">
 							<ul id="386aa1bf-7b79-80cd-a532-fc7089ee5919" class="bulleted-list">
 								<li style="list-style-type:circle">Performed poorly. The larger early rollouts were
@@ -12520,7 +12518,7 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 					<li style="list-style-type:disc">Run 22: run 16 with minibatch size reduced to 256.<div style="display:contents"
 							dir="auto">
 							<ul id="386aa1bf-7b79-8071-9fed-d27db94b5599" class="bulleted-list">
-								<li style="list-style-type:circle">Improved over the run-16 family.</li>
+								<li style="list-style-type:circle">Improved over the <a href="#386aa1bf-7b79-80b4-8a3c-f21ed4340ec7">run-16</a> family.</li>
 							</ul>
 						</div>
 					</li>
@@ -12643,7 +12641,7 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80d8-bf31-f8eb5bebff9e" class="bulleted-list">
-								<li style="list-style-type:circle">Appeared worse than run 27, but this was not a
+								<li style="list-style-type:circle">Appeared worse than <a href="#386aa1bf-7b79-80d2-a832-f9548b43dca8">run 27</a>, but this was not a
 									controlled, multi-seed comparison.</li>
 							</ul>
 						</div>
@@ -12659,7 +12657,7 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8074-b952-c81db161a845" class="bulleted-list">
-								<li style="list-style-type:circle">Curves appeared stronger than run 27, but no shared
+								<li style="list-style-type:circle">Curves appeared stronger than <a href="#386aa1bf-7b79-80d2-a832-f9548b43dca8">run 27</a>, but no shared
 									frozen head-to-head evaluation was run.</li>
 							</ul>
 						</div>
