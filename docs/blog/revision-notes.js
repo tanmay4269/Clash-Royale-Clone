@@ -1,16 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
 	const revisions = [
 		{
-			id: "371aa1bf-7b79-80c7-9c06-c3ae5630cdc2",
-			context: "The Algorithm",
-			html: `
-				<h4>Clarify the “from scratch” claim</h4>
-				<p>Say that PPO, GAE, rollout storage, checkpoint matchmaking and the model architectures were implemented directly in PyTorch. The project still depends on Gymnasium for the environment interface, Pygame for rendering and Weights & Biases for logging. The meaningful distinction is “no external RL training framework,” not “no external framework.”</p>
-				<h4>My suggested addition</h4>
-				<p>Start this section with one frozen final-configuration table. The run history changed gamma, minibatch size, entropy coefficient, architecture flags and opponent mode repeatedly. Readers need to know which values describe the final system and which belong only to historical experiments.</p>
-			`,
-		},
-		{
 			id: "382aa1bf-7b79-8084-9fe0-d2e6c7a84967",
 			context: "Training Algorithm",
 			html: `

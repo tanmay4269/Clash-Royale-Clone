@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>PPO Self-Play on Clash Royale</title>
 	<script src="video-embeds.js" defer></script>
-	<script src="revision-notes.js" defer></script>
+	<script src="revision-notes.js?v=20260621-3" defer></script>
 	<link rel="stylesheet" href="editorial.css?v=20260621-2" />
 	<link rel="stylesheet" href="blog-config.css" />
 	<style>
@@ -2447,15 +2447,153 @@
 				<h1 id="371aa1bf-7b79-80c7-9c06-c3ae5630cdc2" class="">The Algorithm</h1>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="371aa1bf-7b79-805c-85e8-dee4027df04d" class="">All the algorithms were written from scratch, not
-					depending on external frameworks like <a
+				<p id="371aa1bf-7b79-805c-85e8-dee4027df04d" class="">The PPO update, GAE, rollout
+					storage, self-play checkpoint matchmaking and model architectures were implemented directly with
+					<a href="https://pytorch.org">PyTorch</a>. The project does not use an external RL training
+					framework such as <a
 						href="https://stable-baselines3.readthedocs.io/en/master/">Stable-Baselines3</a>, <a
-						href="https://docs.cleanrl.dev">CleanRL</a>, <a
-						href="https://docs.pytorch.org/rl/stable/index.html">TorchRL</a> etc., just <a
-						href="https://pytorch.org">PyTorch</a>. Hence this section details each design decision and some
-					explicit ablations. While the basic PPO algorithm is explained in the <a
+						href="https://docs.cleanrl.dev">CleanRL</a> or <a
+						href="https://docs.pytorch.org/rl/stable/index.html">TorchRL</a>. It still uses <a
+						href="https://gymnasium.farama.org/index.html">Gymnasium</a> for the environment interface,
+					Pygame for simulation and rendering, and Weights &amp; Biases for experiment logging. This section
+					focuses on the directly implemented training and architecture decisions. The basic PPO derivation
+					is explained in the <a
 						href="https://app.notion.com/p/PPO-Self-Play-on-Clash-Royale-371aa1bf7b798015a6f6c6084d8fbc0c?pvs=21">appendix
 						below</a>.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h2>Default training configuration</h2>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p>This table freezes the defaults used by the current command-line training entry point. Historical
+					runs changed several of these values, so their experiment records should be read as overrides rather
+					than descriptions of the final default system.</p>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<table class="simple-table">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header">Area</th>
+							<th class="simple-table-header-color simple-table-header">Setting</th>
+							<th class="simple-table-header-color simple-table-header">Current CLI default</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td rowspan="8">Network</td>
+							<td>Architecture</td>
+							<td><code>deep_sets</code></td>
+						</tr>
+						<tr>
+							<td>Activation</td>
+							<td><code>Tanh</code></td>
+						</tr>
+						<tr>
+							<td>Actor and critic</td>
+							<td>Disjoint encoders and trunks</td>
+						</tr>
+						<tr>
+							<td>Entity attention</td>
+							<td>Enabled</td>
+						</tr>
+						<tr>
+							<td>Card decoder</td>
+							<td>Pointer decoder</td>
+						</tr>
+						<tr>
+							<td>Position decoder</td>
+							<td>Card-conditioned transposed-convolution decoder</td>
+						</tr>
+						<tr>
+							<td>Initialization</td>
+							<td>Orthogonal initialization enabled</td>
+						</tr>
+						<tr>
+							<td>Action temperatures</td>
+							<td>Learned independently per head</td>
+						</tr>
+						<tr>
+							<td rowspan="9">PPO</td>
+							<td>Discount factor, <code>γ</code></td>
+							<td><code>0.997</code></td>
+						</tr>
+						<tr>
+							<td>GAE factor, <code>λ</code></td>
+							<td><code>0.95</code></td>
+						</tr>
+						<tr>
+							<td>Rollout size</td>
+							<td>8 games, <code>9,600</code> transitions</td>
+						</tr>
+						<tr>
+							<td>PPO epochs per rollout</td>
+							<td><code>8</code></td>
+						</tr>
+						<tr>
+							<td>Minibatch size</td>
+							<td><code>2,048</code></td>
+						</tr>
+						<tr>
+							<td>Policy clip coefficient</td>
+							<td><code>0.2</code></td>
+						</tr>
+						<tr>
+							<td>Critic-loss coefficient</td>
+							<td><code>0.5</code></td>
+						</tr>
+						<tr>
+							<td>Entropy coefficient</td>
+							<td><code>0.01</code>, constant</td>
+						</tr>
+						<tr>
+							<td>Gradient clipping</td>
+							<td>Global norm <code>0.5</code></td>
+						</tr>
+						<tr>
+							<td rowspan="4">Optimisation</td>
+							<td>Optimizer</td>
+							<td>Adam</td>
+						</tr>
+						<tr>
+							<td>Initial learning rate</td>
+							<td><code>1.5 × 10⁻⁴</code></td>
+						</tr>
+						<tr>
+							<td>Learning-rate schedule</td>
+							<td>Linear decay to zero over 10 million environment steps</td>
+						</tr>
+						<tr>
+							<td>Automatic LR finder</td>
+							<td>Disabled</td>
+						</tr>
+						<tr>
+							<td rowspan="5">Collection and self-play</td>
+							<td>Parallel environments</td>
+							<td><code>8</code></td>
+						</tr>
+						<tr>
+							<td>Opponent mode</td>
+							<td>Checkpoint self-play, no overfit opponent</td>
+						</tr>
+						<tr>
+							<td>Checkpoint admission</td>
+							<td>At least 100 games and recent mean score ≥ <code>0.55</code></td>
+						</tr>
+						<tr>
+							<td>Opponent sampling</td>
+							<td>50% latest checkpoint, otherwise Elo-weighted toward an even matchup</td>
+						</tr>
+						<tr>
+							<td>Observation and value normalization</td>
+							<td>Disabled</td>
+						</tr>
+						<tr>
+							<td>Optional safety</td>
+							<td>KL early stopping</td>
+							<td>Disabled, threshold retained at <code>0.01</code></td>
+						</tr>
+					</tbody>
+				</table>
 			</div>
 			<div style="display:contents" dir="auto">
 				<h2 id="371aa1bf-7b79-806b-b5cf-e80fc0b7a22e" class="">Network</h2>
