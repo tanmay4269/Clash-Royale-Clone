@@ -11,39 +11,6 @@ document.addEventListener("DOMContentLoaded", () => {
 			`,
 		},
 		{
-			id: "371aa1bf-7b79-806b-b5cf-e80fc0b7a22e",
-			context: "Network",
-			html: `
-				<h4>Correct the Deep Sets description</h4>
-				<ul>
-					<li>Use entity shape <code>(B, N, 26)</code>. Deployed units are aggregated with a masked mean, not a sum.</li>
-					<li>The current attention option is a single <code>MultiheadAttention</code> layer with residual connection and LayerNorm. It is not yet a full Transformer block because it has no feed-forward sublayer.</li>
-					<li>Hand and next-card entities enter the attention sequence and are also flattened into the trunk. Mention this duplicated information path as a current limitation.</li>
-					<li>The 418-dimensional trunk is correct for 32-dimensional embeddings: two scalars, six tower embeddings, two pooled battlefield embeddings, four hand embeddings and one next-card embedding.</li>
-					<li>The current position head can condition on the chosen card embedding, not merely a one-hot deck index. The CNN decoder then outputs the 18 by 32 position grid.</li>
-					<li>Document learned temperature per action head, elixir masking, forced skip, conditional entropy and log probability, orthogonal initialization, actor-head standard deviation <code>0.01</code> and critic-head standard deviation <code>1.0</code>.</li>
-				</ul>
-				<h4>Explain the design choices requested by the comments</h4>
-				<ul>
-					<li><strong>Disjoint actor and critic:</strong> prevents value-loss gradients from directly changing the policy representation, at the cost of nearly doubling encoder and trunk compute.</li>
-					<li><strong>Tanh and LayerNorm:</strong> were chosen for stable bounded activations, but the article should label this as a design choice unless an isolated activation ablation is shown.</li>
-					<li><strong>Pointer decoder:</strong> scores a learned skip token and the four hand embeddings against a state-derived query. This ties card choice to card content instead of hand slot identity.</li>
-					<li><strong>Conditional position decoder:</strong> the chosen hand embedding is concatenated with the actor trunk before predicting location. This is a stronger dependency than independently predicting card and position.</li>
-				</ul>
-				<h4>Correct the Transformer description</h4>
-				<p>Meta features are projected and added to the CLS token. The sequence uses four segment types: CLS, towers, deployed entities and hand plus next card. The current encoder uses pre-LayerNorm, zero dropout and a two-layer post-Transformer MLP. These are newer than the prose and diagram comments.</p>
-				<h4>Explain run 25 versus run 26 exactly</h4>
-				<p>Run 25 used the legacy Deep Sets baseline: one shared encoder and trunk, ReLU, default linear initialization, linear position logits and no card-conditioned position head. Run 26 used the newer Deep Sets bundle: disjoint actor and critic, Tanh, orthogonal initialization with policy and value head scales, a transposed-convolution position decoder, and card-conditioned position prediction. The run did not isolate those factors, so attribute the gain to the bundle, then ablate each component separately.</p>
-				<h4>My suggested additions</h4>
-				<ul>
-					<li>Regenerate both diagrams from the current code and constrain label widths so text does not spill across lines.</li>
-					<li>Test mean plus max pooling or learned pooling because masked mean is the largest information bottleneck.</li>
-					<li>Turn Deep Sets attention into a complete block with attention, feed-forward network, residuals and LayerNorm, then test one versus two blocks.</li>
-					<li>Add a spatial feature-map baseline. The model predicts an 18 by 32 output grid but currently reconstructs spatial structure entirely from entity coordinates.</li>
-				</ul>
-			`,
-		},
-		{
 			id: "382aa1bf-7b79-8084-9fe0-d2e6c7a84967",
 			context: "Training Algorithm",
 			html: `

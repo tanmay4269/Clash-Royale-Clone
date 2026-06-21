@@ -1,196 +1,154 @@
-\documentclass[tikz,border=8pt]{standalone}
+\documentclass[tikz,border=10pt]{standalone}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
-\usepackage{amsmath}
 \usetikzlibrary{arrows.meta, positioning, fit}
 
-\definecolor{boxbg}{HTML}{F8FAFC}
-\definecolor{boxline}{HTML}{334155}
-\definecolor{stagebg}{HTML}{EFF6FF}
-\definecolor{stageborder}{HTML}{2563EB}
-\definecolor{listbg}{HTML}{F8FAFC}
+\definecolor{ink}{HTML}{334155}
+\definecolor{inputbg}{HTML}{F8FAFC}
+\definecolor{sharedbg}{HTML}{EFF6FF}
 \definecolor{actorbg}{HTML}{EEF2FF}
 \definecolor{criticbg}{HTML}{ECFDF5}
 \definecolor{pointerbg}{HTML}{FFF7ED}
-\definecolor{outbg}{HTML}{FEFCE8}
+\definecolor{outputbg}{HTML}{FEFCE8}
 
 \tikzset{
   box/.style={
-    draw=boxline,
+    draw=ink,
     rounded corners=5pt,
     line width=0.8pt,
-    fill=boxbg,
     align=left,
     inner sep=7pt,
     font=\sffamily\small
   },
-  stage/.style={
-    box,
-    fill=stagebg,
-    draw=stageborder,
-    minimum height=16mm,
-    align=center,
-    font=\sffamily\bfseries\small
-  },
-  listbox/.style={
-    box,
-    fill=listbg,
-    text width=56mm
-  },
-  widebox/.style={
-    box,
-    text width=96mm
-  },
-  actorbox/.style={
-    box,
-    fill=actorbg,
-    text width=48mm
-  },
-  criticbox/.style={
-    box,
-    fill=criticbg,
-    text width=42mm
-  },
-  pointerbox/.style={
-    box,
-    fill=pointerbg,
-    text width=64mm
-  },
-  simplebox/.style={
-    box,
-    fill=boxbg,
-    text width=46mm
-  },
-  outbox/.style={
-    box,
-    fill=outbg,
-    align=center,
-    minimum width=32mm
-  },
-  arrow/.style={
-    -{Latex[length=2.5mm]},
-    line width=0.8pt,
-    draw=boxline
-  },
-  softarrow/.style={
-    -{Latex[length=2.2mm]},
-    line width=0.7pt,
-    draw=boxline
-  }
+  input/.style={box, fill=inputbg, text width=55mm},
+  process/.style={box, fill=sharedbg, align=center, text width=43mm},
+  actor/.style={box, fill=actorbg, align=center, text width=47mm},
+  critic/.style={box, fill=criticbg, align=center, text width=47mm},
+  pointer/.style={box, fill=pointerbg, text width=55mm},
+  output/.style={box, fill=outputbg, align=center, minimum width=31mm},
+  note/.style={box, fill=inputbg, text width=49mm, font=\sffamily\footnotesize},
+  arrow/.style={-{Latex[length=2.5mm]}, line width=0.8pt, draw=ink}
 }
 
 \begin{document}
-\begin{tikzpicture}[node distance=11mm and 12mm]
+\begin{tikzpicture}[node distance=11mm and 15mm]
 
-\node[listbox] (inputs) {
-  \textbf{inputs}\\[2pt]
-  $\bullet$ \texttt{my\_cards}\\
-  $\bullet$ \texttt{opponent\_cards}\\
-  $\bullet$ \texttt{my\_crown\_towers}\\
-  $\bullet$ \texttt{opponent\_crown\_towers}\\
-  $\bullet$ \texttt{my\_hand}\\
-  $\bullet$ \texttt{my\_next\_card}
+\node[input, align=center] (obs) {
+  \textbf{observation}\\[2pt]
+  two deployed sets $(B,32,26)$\\
+  six towers $(B,3,26)$\\
+  per side hand $(B,4,26)$\\
+  next card $(B,1,26)$\\
+  game completion and elixir scalars
 };
 
-\node[stage, right=of inputs, text width=35mm] (encoder) {
-  entity encoder\\
-  \normalfont $(B,N,25)\to(B,N,32)$
+\node[process, below=of obs] (split) {
+  \textbf{two independent paths}\\
+  actor and critic each receive\\
+  the complete observation
 };
 
-\node[stage, right=of encoder, text width=35mm] (attention) {
-  self attention\\
-  \normalfont attended embeddings
+\node[actor, below left=12mm and 13mm of split] (actorenc) {
+  \textbf{actor representation}\\
+  entity MLP: $26\to64\to64\to32$\\
+  4-head self-attention\\
+  residual + LayerNorm
 };
 
-\node[widebox, right=of attention] (trunkinput) {
-  \textbf{trunk input} $(B,418)$\\[2pt]
-  $\bullet$ game completion fraction \hfill $(B,1)$\\
-  $\bullet$ my elixir \hfill $(B,1)$\\
-  $\bullet$ sum my card embeddings \hfill $(B,32)$\\
-  $\bullet$ sum opponent card embeddings \hfill $(B,32)$\\
-  $\bullet$ my crown towers flatten \hfill $(B,32\cdot3)$\\
-  $\bullet$ opponent crown towers flatten \hfill $(B,32\cdot3)$\\
-  $\bullet$ hand embeddings flatten \hfill $(B,32\cdot4)$\\
-  $\bullet$ next card embedding \hfill $(B,32)$
+\node[critic, below right=12mm and 13mm of split] (criticenc) {
+  \textbf{critic representation}\\
+  entity MLP: $26\to64\to64\to32$\\
+  4-head self-attention\\
+  residual + LayerNorm
 };
 
-\node[stage, below=20mm of trunkinput, text width=44mm] (trunk) {
-  trunk network\\
-  \normalfont head inputs
+\node[actor, below=of actorenc] (actorpool) {
+  \textbf{actor trunk input $(B,418)$}\\
+  masked means for deployed sets\\
+  flattened towers, hand, next card\\
+  two scalar features
 };
 
-\node[box, below=10mm of trunk, text width=72mm, align=center] (split) {
-  base network is independent for actor and critic\\
-  gives \texttt{actor\_head\_inputs} and \texttt{critic\_head\_inputs}
+\node[critic, below=of criticenc] (criticpool) {
+  \textbf{critic trunk input $(B,418)$}\\
+  masked means for deployed sets\\
+  flattened towers, hand, next card\\
+  two scalar features
 };
 
-\node[criticbox, below left=15mm and 24mm of split] (critic) {
-  \textbf{critic path}\\[2pt]
-  \texttt{critic\_head\_inputs}
+\node[actor, below=of actorpool] (actortrunk) {
+  \textbf{actor trunk}\\
+  $418\to209\to209\to128$
 };
 
-\node[outbox, below=8mm of critic] (value) {
+\node[critic, below=of criticpool] (critictrunk) {
+  \textbf{critic trunk}\\
+  $418\to209\to209\to128$
+};
+
+\node[output, below=of critictrunk] (value) {
   value
 };
 
-\node[actorbox, below right=15mm and 24mm of split] (actor) {
-  \textbf{actor path}\\[2pt]
-  \texttt{actor\_head\_inputs}
+\node[pointer, below left=13mm and 9mm of actortrunk] (candidates) {
+  \textbf{pointer candidates}\\
+  learned skip token\\
+  + four contextual hand embeddings $(B,5,32)$
 };
 
-\node[pointerbox, below=10mm of actor] (query) {
-  \textbf{pointer query}\\[2pt]
-  query $=$ pointer net(actor head inputs)\\
-  $(B,1,32)$
+\node[pointer, below right=13mm and 9mm of actortrunk] (query) {
+  \textbf{state query}\\
+  actor trunk $\to$ linear projection\\
+  $(B,128)\to(B,32)$
 };
 
-\node[pointerbox, left=12mm of query] (candidates) {
-  \textbf{pointer candidates}\\[2pt]
-  candidates $=$ [learned skip token, hand embeddings]\\
-  $(B,5,32)$
+\node[pointer, below=45mm of actortrunk] (scores) {
+  \textbf{candidate scores}\\
+  query-candidate dot products $(B,5)$\\
+  skip logit + four card logits
 };
 
-\node[pointerbox, below=10mm of query] (dot) {
-  \textbf{card score dot product}\\[2pt]
-  card logits $=$ candidates $\cdot$ query\\
-  $(B,5)$
+\node[actor, below=of scores] (condition) {
+  \textbf{card-conditioned state}\\
+  actor trunk\\
+  + selected card embedding\\
+  $(B,128)+(B,32)=(B,160)$
 };
 
-\node[outbox, below left=9mm and 11mm of dot] (skip) {
-  skip logits
+\node[actor, below=of condition] (cnn) {
+  \textbf{CNN position decoder}\\
+  transposed convolutions\\
+  $(B,160)\to(B,18\times32)$
 };
 
-\node[outbox, below right=9mm and 11mm of dot] (deck) {
-  card logits
-};
-
-\node[outbox, right=14mm of query] (pos) {
+\node[output, below=of cnn] (position) {
   position logits
 };
 
-\node[simplebox, right=14mm of pos] (simple) {
-  \textbf{simple variant}\\[2pt]
-  no pointer decoder\\
-  skip logits $=$ linear(actor head inputs)\\
-  deck logits $=$ linear(actor head inputs)
+\node[note, below=of value] (fallback) {
+  \textbf{implemented fallback switches}\\
+  linear skip and card heads,\\
+  unconditioned position head,\\
+  linear 576-way position head,\\
+  shared actor-critic network
 };
 
-\draw[arrow] (inputs) -- (encoder);
-\draw[arrow] (encoder) -- (attention);
-\draw[arrow] (attention) -- (trunkinput);
-\draw[arrow] (trunkinput.south) -- (trunk.north);
-\draw[arrow] (trunk) -- (split);
-\draw[arrow] (split) -- (critic);
-\draw[arrow] (critic) -- (value);
-\draw[arrow] (split) -- (actor);
-\draw[arrow] (actor) -- (query);
-\draw[softarrow] (actor) -- node[above, font=\sffamily\tiny] {hand embeddings} (candidates);
-\draw[arrow] (query) -- (dot);
-\draw[arrow] (candidates) -- (dot);
-\draw[arrow] (dot) -- (skip);
-\draw[arrow] (dot) -- (deck);
-\draw[softarrow] (actor) -- node[above, font=\sffamily\tiny] {position net} (pos);
-\draw[softarrow] (actor) -- (simple);
+\draw[arrow] (obs) -- (split);
+\draw[arrow] (split) -- (actorenc);
+\draw[arrow] (split) -- (criticenc);
+\draw[arrow] (actorenc) -- (actorpool);
+\draw[arrow] (criticenc) -- (criticpool);
+\draw[arrow] (actorpool) -- (actortrunk);
+\draw[arrow] (criticpool) -- (critictrunk);
+\draw[arrow] (critictrunk) -- (value);
+\draw[arrow] (actortrunk) -- (query);
+\draw[arrow] (actortrunk) -- (candidates);
+\draw[arrow] (query) -- (scores);
+\draw[arrow] (candidates) -- node[left, font=\sffamily\tiny] {hand embeddings} (scores);
+\draw[arrow] (actortrunk.east) -- ++(8mm,0) |- (condition.east);
+\draw[arrow] (scores) -- node[right, font=\sffamily\tiny] {sampled card} (condition);
+\draw[arrow] (condition) -- (cnn);
+\draw[arrow] (cnn) -- (position);
 
 \end{tikzpicture}
 \end{document}

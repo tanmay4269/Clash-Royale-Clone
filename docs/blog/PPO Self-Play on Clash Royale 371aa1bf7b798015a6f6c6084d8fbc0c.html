@@ -2463,6 +2463,18 @@
 			<div style="display:contents" dir="auto">
 				<h3 id="371aa1bf-7b79-8005-8a57-df588b05e10a" class="">Deep Sets Network</h3>
 			</div>
+			<div style="display:contents" dir="auto">
+				<p>The observation contains a fixed set of towers and cards in hand, but the number and ordering of
+					deployed entities change throughout a match. A Deep Sets style network handles this by encoding
+					every entity with the same function, then pooling the deployed entities into fixed-size summaries.
+					Towers, the hand and the next card retain their explicit slots because their ordering has known
+					meaning.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p>The default model uses separate actor and critic encoders and trunks. Both receive the same
+					observation, but they learn independent representations for choosing actions and estimating state
+					value.</p>
+			</div>
 			<div style="display:contents" dir="ltr">
 				<figure id="382aa1bf-7b79-8055-8d60-e174ba3e66cb" class="image"><a
 						href="PPO%20Self-Play%20on%20Clash%20Royale/image%201.png"><img style="width:704px"
@@ -2475,217 +2487,150 @@
 				<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css"
 					integrity="sha512-tN7Ec6zAFaVSG3TpNAKtk4DOHNpSwKHxxrsiw4GHKESGPs5njn/0sMCUMl2svV4wo4BK/rCP7juYz+zx+l6oeQ=="
 					crossorigin="anonymous" referrerPolicy="no-referrer" />
-				<pre id="382aa1bf-7b79-802b-a520-efc4528caf32" class="code code-wrap"><code class="language-markdown" style="white-space:pre-wrap;word-break:break-all">- inputs
-    - my_cards
-    - opponent cards
-    - my_crown_towers
-    - opponent_crown_towers
-    - my_hand
-    - my_next_card
-- inputs (B, N, 25) → [entity encoder] → entity embeddings (B, N, 32) → [self attention] → attended entity embeddings
-- attended entity embeddings (B, N, 32) → trunk input (B, 418):
-    - game_completion_fraction                     (B, 1)
-    - my_elixir                                    (B, 1)
-    - sum(my_cards_embeddings)                     (B, 32)
-    - sum(opponent_card_embeddings)                (B, 32)
-    - my_crown_tower_embeddings.flatten()          (B, 32 * 3)
-    - opponent_crown_tower_embeddings.flatten()    (B, 32 * 3)
-    - hand_embeddings.flatten()                    (B, 32 * 4)
-    - next_card_embeddings.flatten()               (B, 32)
-- trunk input → [trunk network] → head_inputs
-- the above base network is independent for actor and critic, hence we now have actor_head_inputs and critic_head_inputs
-- critic_head_inputs → value
-- actor_head_inputs
-    → [skip net] → skip logits
-    → [deck net] → deck logits
-    → [position net] → position logits
-- pointer net variant:
-    - candidates  = [leant_skip_token, actor_hand_embeddings] (B, 5, 32) 
-    - query       = pointer_net(actor_head_inputs)            (B, 1, 32)
-    - card_logits = candidates . query                        (B, 5)
-    → skip logits
-    → card logits</code></pre>
+				<pre id="382aa1bf-7b79-802b-a520-efc4528caf32" class="code code-wrap"><code class="language-text" style="white-space:pre;word-break:normal">Observation
+	├── game completion fraction: 	(B, 1)
+	├── elixir: 					(B, 1)
+	├── my deployed entities: 		(B, 32, 26)
+	├── opponent deployed entities: (B, 32, 26)
+	├── my towers: 					(B, 3, 26)
+	├── opponent towers: 			(B, 3, 26)
+	├── hand: 						(B, 4, 26)
+	└── next card: 					(B, 1, 26)
+
+All entities: (B, 75, 26)
+	→ shared-form entity encoder applied independently to every entity
+		Linear(26, 64), LayerNorm, Tanh
+		Linear(64, 64), LayerNorm, Tanh
+		Linear(64, 32), LayerNorm, Tanh
+	→ entity embeddings: (B, 75, 32)
+	→ 4-head self-attention
+	→ residual connection and LayerNorm
+	→ contextual entity embeddings: (B, 75, 32)
+
+Trunk input: (B, 418)
+	├── game completion fraction: 					1
+	├── elixir: 									1
+	├── my towers, flattened: 						3 × 32
+	├── opponent towers, flattened: 				3 × 32
+	├── masked mean of my deployed entities: 		32
+	├── masked mean of opponent deployed entities:  32
+	├── hand embeddings, flattened: 				4 × 32
+	└── next-card embedding: 						32
+
+Actor path
+	→ actor trunk: 418 → 209 → 209 → 128
+	→ pointer query: (B, 128) → (B, 32)
+	→ candidates: [learned skip token, four hand embeddings] = (B, 5, 32)
+	→ query-candidate dot products: (B, 5)
+		├── candidate 0: skip logit
+		└── candidates 1 to 4: card logits
+	→ sample the card
+	→ concatenate actor trunk output with chosen card embedding: (B, 160)
+	→ transposed-convolution position decoder
+	→ position logits: (B, 18 × 32)
+
+Critic path
+	→ critic trunk: 418 → 209 → 209 → 128
+	→ linear value head
+	→ state value: (B,)
+
+Fallback variants
+	├── linear skip and card heads instead of the pointer decoder
+	├── position prediction without the chosen card embedding
+	├── linear 576-way position head instead of the CNN decoder
+	└── shared actor-critic encoder and trunk</code></pre>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="385aa1bf-7b79-8091-a6b1-f63fdf646f44" class="bulleted-list">
-					<li style="list-style-type:disc">Notable design choices<div style="display:contents" dir="auto">
-							<ul id="385aa1bf-7b79-807f-b5b7-f15a80dd661c" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked">Disjoint actor critique - importance of
-										it</span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-8014-b594-db6332d5d72d" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked">Activation function choice (why not relu
-										everywhere, instead tanh)</span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-80bc-b943-f8c09563e435" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked">Using <code>LayerNorm</code> everywhere</span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-805a-9cb1-d9333eda0ba0" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked">Specific layer init: last layers have std=1.0
-										while rest all are std=sqrt(2)</span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="385aa1bf-7b79-80c5-a464-e84037610684" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked">Entity Encoder </span>
-									<div class="indented">
-										<div style="display:contents" dir="auto">
-											<ul id="386aa1bf-7b79-8003-a5b0-f76b76afad5b" class="to-do-list">
-												<li>
-													<div class="checkbox checkbox-off"></div> <span
-														class="to-do-children-unchecked">having enough capacity, ie.
-														more than the number of entities else we can’t represent them
-														well. </span>
-													<div class="indented"></div>
-												</li>
-											</ul>
-										</div>
-										<div style="display:contents" dir="auto">
-											<ul id="386aa1bf-7b79-8006-830a-ca5c3b593163" class="to-do-list">
-												<li>
-													<div class="checkbox checkbox-off"></div> <span
-														class="to-do-children-unchecked">entity_encoder_in/mid/out_ch</span>
-													<div class="indented"></div>
-												</li>
-											</ul>
-										</div>
-									</div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-80a5-bf86-e154d4c6e951" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked">Attention: explain
-										<code>apply_attention</code></span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-80f7-bb39-e5a5c4d4005f" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked">Trunk</span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-8079-ae52-d6fe408de7aa" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked">Critic head</span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-804e-84f7-e91ee185226c" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked">Pointer decoder: with vs without</span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-8035-8922-fc78ba67e19c" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span class="to-do-children-unchecked">CNN
-										position decoder</span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-80f6-96af-fcd59efaae84" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked"><code>get_action_and_value</code></span>
-									<div class="indented">
-										<div style="display:contents" dir="auto">
-											<ul id="386aa1bf-7b79-80c7-af60-d67f92dbd288" class="to-do-list">
-												<li>
-													<div class="checkbox checkbox-off"></div> <span
-														class="to-do-children-unchecked"><code>use_learned_temperature</code></span>
-													<div class="indented"></div>
-												</li>
-											</ul>
-										</div>
-										<div style="display:contents" dir="auto">
-											<ul id="386aa1bf-7b79-8007-a754-c1299de7963c" class="to-do-list">
-												<li>
-													<div class="checkbox checkbox-off"></div> <span
-														class="to-do-children-unchecked">Masking skip and deck idx based
-														on elixir</span>
-													<div class="indented"></div>
-												</li>
-											</ul>
-										</div>
-										<div style="display:contents" dir="auto">
-											<ul id="386aa1bf-7b79-80f3-8adc-e3324e9227a1" class="to-do-list">
-												<li>
-													<div class="checkbox checkbox-off"></div> <span
-														class="to-do-children-unchecked">action is None vs not</span>
-													<div class="indented"></div>
-												</li>
-											</ul>
-										</div>
-										<div style="display:contents" dir="auto">
-											<ul id="386aa1bf-7b79-80b3-85f6-f83907c2a40f" class="to-do-list">
-												<li>
-													<div class="checkbox checkbox-off"></div> <span
-														class="to-do-children-unchecked"><code>append_deck_info_to_position_head_input</code></span>
-													<div class="indented"></div>
-												</li>
-											</ul>
-										</div>
-										<div style="display:contents" dir="auto">
-											<ul id="386aa1bf-7b79-8097-abe4-cbde649e3f01" class="to-do-list">
-												<li>
-													<div class="checkbox checkbox-off"></div> <span
-														class="to-do-children-unchecked">entropy masking based on
-														skip</span>
-													<div class="indented"></div>
-												</li>
-											</ul>
-										</div>
-									</div>
-								</li>
-							</ul>
-						</div>
-					</li>
-				</ul>
+				<h4>Entity encoding and pooling</h4>
+				<p>Every entity is represented by the same 26 normalized features and passed through the same
+					three-layer MLP. This weight sharing means that the representation of a Knight does not depend on
+					whether it occupies the first or tenth deployed-entity slot.</p>
+				<p>The deployed entities are padded to 32 slots per player. Zero-padded slots are excluded using a
+					mask, then the remaining embeddings are averaged. Masked mean pooling makes the battlefield summary
+					invariant to entity ordering and keeps its scale relatively stable as troop count changes.</p>
+				<p>This pooling is also the main information bottleneck. A mean does not directly preserve entity
+					count, the strongest individual activation or multimodal groups of troops. Mean plus max pooling,
+					learned pooling or a spatial feature-map encoder would retain more information, but the current
+					model does not implement them.</p>
+				<p>Towers, hand cards and the next card are not pooled. Their embeddings are flattened into the trunk
+					so the model can distinguish the left tower from the right tower and each current hand slot. Hand
+					and next-card entities also participate in self-attention before entering the trunk. This gives them
+					access to battlefield context, although it also creates a direct trunk path and an
+					attention-mediated path for the same information.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="385aa1bf-7b79-8040-8844-d32a6b56b59a" class="">
-				</p>
+				<h4>Entity attention</h4>
+				<p>The attention layer lets every encoded entity use information from every other entity before
+					pooling. For example, a troop embedding can change depending on nearby enemies, towers and cards in
+					hand.</p>
+				<p>The implementation uses one four-head <code>MultiheadAttention</code> layer, followed by a residual
+					connection and <code>LayerNorm</code>. It is not a complete Transformer block because it has no
+					attention-specific feed-forward sublayer. Zero-padded entities are masked as keys and values so they
+					do not affect valid entities.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Disjoint actor and critic</h4>
+				<p>The default model constructs separate entity encoders, attention layers and trunks for the actor and
+					critic. The actor can therefore learn features useful for comparing actions, while the critic can
+					learn features useful for predicting return. In a shared network, value-loss gradients also modify
+					the representation used by the policy, which can create gradient interference.</p>
+				<p>The tradeoff is cost: the disjoint configuration nearly doubles representation compute and parameter
+					count. It is a plausible design choice, not an isolated empirical conclusion in this project.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Pointer card decoder</h4>
+				<p>A normal linear card head predicts four logits tied to the four hand positions. The pointer decoder
+					instead derives a query from the current actor state and compares it with five candidates: one
+					learned skip token and the four contextual hand embeddings.</p>
+				<p>The dot product between the query and each candidate produces one skip logit and four card logits.
+					Card selection is therefore based on the encoded properties of the available cards, rather than
+					only on fixed hand-slot identities. The same mechanism also gives skip a representation that
+					competes directly with playing a card.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Card-conditioned position decoder</h4>
+				<p>Where a card should be deployed depends strongly on which card was selected. The model samples a
+					card, retrieves that card's 32-dimensional hand embedding, concatenates it with the 128-dimensional
+					actor trunk output, then predicts the deployment location from the resulting 160-dimensional
+					vector.</p>
+				<p>The default position head is a transposed-convolution decoder that expands this vector into an
+					<code>18 × 32</code> arena grid. This gives the output a spatial structure that a single 576-way
+					linear layer does not encode. It also has substantially more capacity than the linear alternative,
+					so comparisons between them are not parameter matched.</p>
+				<p>The decoder still reconstructs the complete spatial grid from entity coordinates embedded in
+					vectors. A spatial input representation would provide a more direct correspondence between
+					battlefield locations and output locations.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Action masking and probability calculation</h4>
+				<p>The environment action contains three values: skip, card and position. Cards costing more than the
+					current elixir are masked before sampling. If all four cards are unaffordable, skip is forced with a
+					large finite logit, and the card logits are reset to finite values to avoid invalid categorical
+					distributions.</p>
+				<p>When skip is selected, the sampled card and position have no effect on the environment. Their log
+					probabilities and entropy terms are therefore excluded from the PPO objective for that step. This
+					prevents the policy from being trained on arbitrary card and position samples attached to a skip
+					action.</p>
+				<p>During rollout collection, the network samples actions. During PPO updates, the stored actions are
+					passed back into the same distributions so their new log probabilities, entropy and value estimates
+					can be evaluated.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Normalization, activation and initialization</h4>
+				<p>The entity encoder and trunk use <code>LayerNorm</code> after every linear layer, followed by
+					<code>Tanh</code>. Layer normalization limits changes in activation scale across observations, while
+					<code>Tanh</code> keeps hidden activations bounded. These are stability-motivated choices, but this
+					project has not isolated their effects against ReLU or ELU without changing other architecture
+					settings.</p>
+				<p>Linear layers use orthogonal initialization. Hidden layers use gain <code>sqrt(2)</code>, actor
+					output projections use <code>0.01</code>, and the critic output uses <code>1.0</code>. Small
+					actor-output initialization begins with relatively uncommitted action logits, while the larger
+					critic scale avoids constraining initial value predictions to the same narrow range. The CNN
+					position decoder's final layer also uses <code>0.01</code>.</p>
+				<p>Skip, card and position logits each have a learned positive temperature. The parameters are
+					initialized to zero and transformed with <code>softplus</code>, so the initial temperature is
+					approximately <code>0.693</code>, not exactly <code>1.0</code>. Each action component can then
+					independently adjust how sharp or diffuse its distribution becomes.</p>
 			</div>
 			<div style="display:contents" dir="auto">
 				<h3 id="371aa1bf-7b79-8022-ad16-fc7a285ce11a" class="">Transformer Network</h3>
