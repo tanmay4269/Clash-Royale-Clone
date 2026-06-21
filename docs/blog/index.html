@@ -3130,39 +3130,319 @@ Outputs
 				<h1 id="371aa1bf-7b79-8012-bc27-f64d8a45a5ec" class="">Experiments</h1>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-80cd-826e-f8c33a07e27d" class="bulleted-list">
-					<li style="list-style-type:disc">TODOs: <div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-804a-b880-fcb277261c88" class="bulleted-list">
-								<li style="list-style-type:circle"><code>DiagnosticsLogger</code> : explain everything
-									here, how to read them</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-80f3-9992-fb6fe367d497" class="bulleted-list">
-								<li style="list-style-type:circle"><code>BotNet</code> based overfitting test</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-80b9-8a95-c3e28c62ea74" class="bulleted-list">
-								<li style="list-style-type:circle">Add a brief account of that in Appendix/Experiments :
-									key pivotal changes that helped arrive at the final system</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-804f-94b3-d871b3328b40" class="bulleted-list">
-								<li style="list-style-type:circle">Final results and comparisons between approaches like
-									deepsets with various internals and transformers model<div style="display:contents"
-										dir="auto">
-										<ul id="386aa1bf-7b79-80fb-b54b-cc4d4a470282" class="bulleted-list">
-											<li style="list-style-type:square">The final result is the elo of each
-												approach when let to play in a pool of all contestants. </li>
-										</ul>
-									</div>
-								</li>
-							</ul>
-						</div>
-					</li>
+				<p>The experiments had three roles: verify that the training loop could overfit simple opponents,
+					diagnose failed runs, and compare the final network variants in a common evaluation pool.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>How to read the training diagnostics</h4>
+				<p>No single curve defines a good run. A healthy run should improve against a fixed opponent, retain
+					multiple viable actions, learn a useful value function and update the policy without repeatedly
+					hitting PPO's clipping limits.</p>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<table class="simple-table" style="table-layout:fixed;width:100%;font-size:0.92em">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header" style="width:225px">Diagnostic</th>
+							<th class="simple-table-header-color simple-table-header">Expected behavior in a good run</th>
+							<th class="simple-table-header-color simple-table-header">Warning signs</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>score</code></td>
+							<td>Against a fixed bot, the smoothed score should rise and remain high. In self-play it
+								naturally stays near <code>0.5</code> as opponents improve with the learner.</td>
+							<td>A flat fixed-bot score, or a temporary rise followed by collapse.</td>
+						</tr>
+						<tr>
+							<td><code>return</code></td>
+							<td>The smoothed return should rise with fixed-opponent score. It can remain noisy because
+								damage, tower destruction and outcome rewards vary between games.</td>
+							<td>Return rises while score and tower kills do not. This suggests reward shaping is being
+								optimized without improving wins.</td>
+						</tr>
+						<tr>
+							<td><code>elo</code></td>
+							<td>Within one self-play run, Elo should increase and eventually slow as the policy reaches
+								the strength of its checkpoint pool.</td>
+							<td>Comparing Elo across separate training runs. Each run has a different opponent pool, so
+								the scales are not shared.</td>
+						</tr>
+						<tr>
+							<td><code>buffer_games_completed</code></td>
+							<td>Should be consistent with rollout length and average episode duration.</td>
+							<td>Sudden changes without a configuration change can indicate reset, termination or worker
+								problems.</td>
+						</tr>
+						<tr>
+							<td><code>buffer_games_terminated</code>, <code>buffer_games_truncated</code></td>
+							<td>As play becomes more decisive, true terminations should increase relative to
+								time-limit truncations.</td>
+							<td>Nearly every game truncates even while return rises.</td>
+						</tr>
+						<tr>
+							<td><code>avg_towers_killed_by_p1/p2</code></td>
+							<td>The learner's tower kills should rise against fixed bots. In balanced self-play, the two
+								sides should remain similar over enough games.</td>
+							<td>Strong reward or Elo curves without increased tower conversion.</td>
+						</tr>
+						<tr>
+							<td><code>avg_ep_duration_frames</code></td>
+							<td>Should fall when the learner begins finishing weak opponents, then stabilize.</td>
+							<td>Very short games caused by collapse, or maximum-length games caused by passive play.</td>
+						</tr>
+						<tr>
+							<td><code>avg_elixir_p1</code></td>
+							<td>Should settle away from both extremes. Some reserve is useful, but a capable policy
+								should spend elixir regularly.</td>
+							<td>Persistently near maximum means the policy is not acting. Persistently near zero can mean
+								it plays every affordable card without strategy.</td>
+						</tr>
+						<tr>
+							<td><code>skip_ratio</code></td>
+							<td>Should decrease from an untrained policy and stabilize above zero because waiting is
+								sometimes valid or forced.</td>
+							<td>Near one means no-play collapse. Near zero can mean indiscriminate card spam.</td>
+						</tr>
+						<tr>
+							<td>Card-use histogram</td>
+							<td>Cards need not be equally frequent, but several cards should remain active and usage
+								should respond to the matchup.</td>
+							<td>One card permanently dominates while alternatives disappear.</td>
+						</tr>
+						<tr>
+							<td>Position histograms</td>
+							<td>Deployments should concentrate in legal, tactically useful regions while retaining more
+								than one lane or cell.</td>
+							<td>A single-cell collapse, uniform noise, or persistent edge placement.</td>
+						</tr>
+						<tr>
+							<td>Per-head entropy</td>
+							<td>Should decline gradually as decisions become more confident, then remain above zero.
+								Card and position heads can decay at different rates.</td>
+							<td>A rapid fall to zero indicates policy collapse. Flat maximum entropy indicates no
+								learning.</td>
+						</tr>
+						<tr>
+							<td>KL versus initial policy</td>
+							<td>Should generally increase, confirming that each action head has moved away from its
+								initial behavior.</td>
+							<td>One head remains near zero throughout training and may not be learning.</td>
+						</tr>
+						<tr>
+							<td>KL versus pre-update policy</td>
+							<td>Should remain small and stable. Different heads may move by different amounts.</td>
+							<td>Large spikes indicate an unstable PPO update.</td>
+						</tr>
+						<tr>
+							<td><code>actor_loss</code></td>
+							<td>Should remain finite and relatively small. Its absolute value is not expected to
+								decrease monotonically because every rollout changes the objective.</td>
+							<td>Large spikes, NaNs, or sustained drift accompanying high KL.</td>
+						</tr>
+						<tr>
+							<td><code>critic_loss</code></td>
+							<td>Usually falls early and then fluctuates around a bounded level as the policy and return
+								distribution change.</td>
+							<td>Persistent growth or repeated large spikes.</td>
+						</tr>
+						<tr>
+							<td><code>explained_variance</code></td>
+							<td>Should rise above zero. Values approaching one mean the critic explains most variation
+								in the return targets.</td>
+							<td>Near zero means little predictive value. Negative values mean the critic is worse than
+								predicting a constant.</td>
+						</tr>
+						<tr>
+							<td><code>value_mean</code></td>
+							<td>Should track the scale and direction of observed returns without unbounded drift.</td>
+							<td>Large movement disconnected from return, or saturation at one value.</td>
+						</tr>
+						<tr>
+							<td><code>critic_weight_norm</code></td>
+							<td>Can grow early, then should remain bounded.</td>
+							<td>Continuous growth alongside critic-loss instability.</td>
+						</tr>
+						<tr>
+							<td><code>pre_clip_grad_norm</code></td>
+							<td>Occasional clipping is expected. Most updates should remain in a consistent range.</td>
+							<td>Nearly every update greatly exceeds the <code>0.5</code> clipping threshold.</td>
+						</tr>
+						<tr>
+							<td><code>ratio_mean</code></td>
+							<td>Should remain near <code>1</code>, meaning new action probabilities remain centered
+								around the rollout policy.</td>
+							<td>Sustained movement away from one.</td>
+						</tr>
+						<tr>
+							<td><code>clip_fraction</code></td>
+							<td>Roughly <code>0.05</code> to <code>0.15</code> indicates that PPO is using the rollout
+								without clipping most samples.</td>
+							<td>Below <code>0.02</code> suggests weak updates. Above <code>0.30</code> suggests excessive
+								learning rate or too many epochs.</td>
+						</tr>
+						<tr>
+							<td><code>approx_kl</code></td>
+							<td>Should be positive, small and stable. The optional stopping threshold is
+								<code>0.01</code>.</td>
+							<td>Repeated spikes above the threshold indicate excessive policy movement.</td>
+						</tr>
+						<tr>
+							<td><code>advantage_mean</code></td>
+							<td>Should remain close to zero because advantages are normalized per minibatch.</td>
+							<td>A persistent offset indicates a normalization or logging error.</td>
+						</tr>
+						<tr>
+							<td><code>epochs_completed</code></td>
+							<td>Equals the configured PPO epoch count when KL stopping is disabled.</td>
+							<td>Frequent early stops indicate updates are too aggressive.</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>BotNet overfitting tests</h4>
+				<p>Before full self-play, the learner was tested against opponents whose behavior did not change during
+					training. This isolates whether PPO can learn the environment at all.</p>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<table class="simple-table" style="table-layout:fixed;width:100%">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header" style="width:150px">Opponent</th>
+							<th class="simple-table-header-color simple-table-header">Behavior</th>
+							<th class="simple-table-header-color simple-table-header">What success demonstrates</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Scripted bot</td>
+							<td>Waits for elixir, always plays the first card and alternates between two lanes.</td>
+							<td>The policy can learn card timing, defense and lane-specific placement against a
+								predictable strategy.</td>
+						</tr>
+						<tr>
+							<td>Random bot</td>
+							<td>Samples skip, card and valid deployment position from uniform distributions.</td>
+							<td>The policy can exploit varied but non-adaptive play instead of memorizing one scripted
+								sequence.</td>
+						</tr>
+						<tr>
+							<td>Frozen checkpoint</td>
+							<td>Uses a saved learned policy whose parameters remain fixed for the complete test.</td>
+							<td>The learner can improve against coherent learned behavior. Multiple checkpoints are
+								needed because performance against one opponent can be matchup-specific.</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p>For these tests, score and win rate are meaningful because opponent strength is fixed. A run should
+					not be called solved from its training curve alone: the final checkpoint should be evaluated in
+					fresh games from both player sides and several seeds.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Pivotal changes</h4>
+				<p>The appendix records many exploratory runs. The following changes were the ones that materially
+					changed the direction of the project.</p>
+				<ul class="bulleted-list">
+					<li style="list-style-type:disc"><strong>Checkpoint opponent pool:</strong> early self-play against
+						only the latest policy collapsed into both agents preferring not to play. Sampling older
+						checkpoints introduced strategic diversity and prevented this immediate equilibrium.</li>
+					<li style="list-style-type:disc"><strong>Conditional action probabilities:</strong> card and
+						position log probabilities and entropy were excluded on skip actions. This stopped PPO from
+						training irrelevant action components when no card was played.</li>
+					<li style="list-style-type:disc"><strong>Longer credit assignment:</strong> increasing
+						<code>γ</code> from <code>0.99</code> to <code>0.997</code> produced the first major improvement
+						against the scripted opponent.</li>
+					<li style="list-style-type:disc"><strong>Elixir-aware action masking:</strong> unaffordable cards
+						were masked and skip was forced when every card was unaffordable. This produced the largest
+						clear behavioral jump, taking the random-bot run beyond 80% training win rate.</li>
+					<li style="list-style-type:disc"><strong>Dynamic checkpoint Elo:</strong> saved opponents initially
+						kept their original Elo forever, creating misleading rating growth. Updating both learner and
+						checkpoint ratings made matchmaking and within-run Elo more coherent.</li>
+					<li style="list-style-type:disc"><strong>Entity-based networks:</strong> the final system moved from
+						early flat actor-critic models to Deep Sets and Transformer representations that could process a
+						variable battlefield while retaining explicit hand and tower information.</li>
 				</ul>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Deep Sets and Transformer training logs</h4>
+				<p>The recorded dashboard below compares the complete 10 million-step run 30 Deep Sets model with the
+					run 31 Transformer. Only the exported dashboard image is available locally, not the underlying
+					history, so exact windowed statistics cannot be recomputed.</p>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<figure class="image"><a
+						href="PPO%20Self-Play%20on%20Clash%20Royale/image%2010.png"><img
+							src="PPO%20Self-Play%20on%20Clash%20Royale/image%2010.png" /></a></figure>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p><strong>Shared pattern:</strong> both runs reached a self-play score around <code>0.6</code>, positive
+					return and high explained variance. Neither curve establishes superior playing strength because
+					the runs trained against different checkpoint pools.</p>
+				<p><strong>Deep Sets:</strong> explained variance rose quickly to roughly <code>0.95</code>. Entropy
+					declined gradually to about <code>0.1</code>, while critic loss remained mostly near
+					<code>0.1</code> before becoming noisier late in training. Return peaked around the middle of the
+					run and declined toward the end even as within-run Elo continued rising. This divergence means the
+					final checkpoint should be tested directly rather than selected from Elo alone.</p>
+				<p><strong>Transformer:</strong> explained variance learned more slowly but eventually approached
+					<code>0.9</code>. Its entropy fell much closer to zero, indicating a substantially more deterministic
+					policy. Critic loss stayed much larger and noisier than Deep Sets, approximately
+					<code>0.2</code> to <code>0.4</code> for much of the run. Score and return remained comparable or
+					slightly higher near the end, but the recorded gameplay was more passive. This can be a stable
+					self-play equilibrium without being the strongest policy against other architectures.</p>
+			</div>
+			<div class="section-callout-danger" dir="auto">
+				<h4>Rerun analysis: to be filled</h4>
+				<p>Rerun one fully trained Deep Sets model and one Transformer with the same environment version,
+					training steps, seeds, reward settings and opponent sampler. Fill this block from the exported raw
+					histories, not screenshots.</p>
+				<table class="simple-table" style="table-layout:fixed;width:100%">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header">Measurement</th>
+							<th class="simple-table-header-color simple-table-header">Deep Sets rerun</th>
+							<th class="simple-table-header-color simple-table-header">Transformer rerun</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td>Run ID and seed</td><td>TODO</td><td>TODO</td></tr>
+						<tr><td>Final fixed-checkpoint win rate</td><td>TODO</td><td>TODO</td></tr>
+						<tr><td>Final score and return</td><td>TODO</td><td>TODO</td></tr>
+						<tr><td>Final explained variance and critic loss</td><td>TODO</td><td>TODO</td></tr>
+						<tr><td>Final per-head entropy</td><td>TODO</td><td>TODO</td></tr>
+						<tr><td>Clip fraction and approximate KL</td><td>TODO</td><td>TODO</td></tr>
+						<tr><td>Termination and truncation rate</td><td>TODO</td><td>TODO</td></tr>
+						<tr><td>Observed gameplay behavior</td><td>TODO</td><td>TODO</td></tr>
+					</tbody>
+				</table>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Final contestant-pool results</h4>
+				<p>Training Elo is not used for the final comparison. Freeze one checkpoint from each approach, reset
+					every contestant to Elo 1,200, and let all contestants play in the same pool with equal games and
+					both player-side assignments. The final reported result is the Elo reached by each approach in this
+					shared pool.</p>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<table class="simple-table" style="table-layout:fixed;width:100%">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header">Approach</th>
+							<th class="simple-table-header-color simple-table-header">Checkpoint</th>
+							<th class="simple-table-header-color simple-table-header">Games</th>
+							<th class="simple-table-header-color simple-table-header">Pool Elo</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td>Deep Sets baseline</td><td>TODO</td><td>TODO</td><td>TODO</td></tr>
+						<tr><td>Deep Sets with pointer decoder</td><td>TODO</td><td>TODO</td><td>TODO</td></tr>
+						<tr><td>Deep Sets with entity attention</td><td>TODO</td><td>TODO</td><td>TODO</td></tr>
+						<tr><td>Transformer</td><td>TODO</td><td>TODO</td><td>TODO</td></tr>
+					</tbody>
+				</table>
 			</div>
 			<div style="display:contents" dir="auto">
 				<h1 id="382aa1bf-7b79-80db-b27d-ed807ec9c0cd" class="">Ablations</h1>

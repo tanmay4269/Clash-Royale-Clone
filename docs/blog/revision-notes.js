@@ -1,27 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
 	const revisions = [
 		{
-			id: "371aa1bf-7b79-8012-bc27-f64d8a45a5ec",
-			context: "Experiments",
-			html: `
-				<h4>Replace the TODO list with an evaluation protocol</h4>
-				<p>Training Elo values from separate runs are not directly comparable because each run creates its own opponent population. For the final comparison, freeze representative checkpoints from every architecture and evaluate them in one shared round-robin pool with equal games, swapped player sides and multiple seeds. Report the game matrix, win rates and a rating fitted from that common matrix.</p>
-				<h4>Explain DiagnosticsLogger by decision, not by field name</h4>
-				<ul>
-					<li><strong>Is behavior improving:</strong> score, return, Elo, tower kills and evaluation against fixed scripted and random bots.</li>
-					<li><strong>Is the policy collapsing:</strong> skip ratio, card histogram, deployment heatmap and per-head entropy.</li>
-					<li><strong>Is PPO using the rollout:</strong> ratio mean, clip fraction, approximate KL and KL per action head.</li>
-					<li><strong>Can the critic learn:</strong> critic loss and explained variance. Add value and return histograms because the current logger does not show whether either distribution has collapsed.</li>
-					<li><strong>Does the environment terminate meaningfully:</strong> terminated versus truncated games, episode duration and tower kills.</li>
-				</ul>
-				<p>Add the missing reward decomposition: HP-delta reward, tower-destruction reward, outcome reward and step penalty. Without this, the article cannot establish which reward term drives a result.</p>
-				<h4>Explain the BotNet ladder</h4>
-				<p>Use fixed references in increasing difficulty: always skip, scripted alternating lane, uniform random, then frozen learned checkpoints. “Solved” should mean a predeclared win-rate threshold across several seeds, not one favorable training curve.</p>
-				<h4>My suggested addition</h4>
-				<p>Use one summary table with columns for run, opponent, cards, architecture, isolated change, seeds, evaluation games and result. This will prevent the chronology from mixing causal ablations with exploratory runs.</p>
-			`,
-		},
-		{
 			id: "382aa1bf-7b79-80db-b27d-ed807ec9c0cd",
 			context: "Ablations",
 			html: `
