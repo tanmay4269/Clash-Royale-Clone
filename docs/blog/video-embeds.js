@@ -43,7 +43,8 @@ document.addEventListener("DOMContentLoaded", () => {
 	const updateProgress = () => {
 		const scrollable = document.documentElement.scrollHeight - window.innerHeight;
 		const ratio = scrollable > 0 ? window.scrollY / scrollable : 0;
-		progressFill.style.transform = `scaleX(${Math.min(1, Math.max(0, ratio))})`;
+		const percentage = Math.min(100, Math.max(0, ratio * 100));
+		progress.style.clipPath = `polygon(0 0, ${percentage}% 0, ${percentage}% 100%, 0 100%)`;
 	};
 
 	window.addEventListener("scroll", updateProgress, { passive: true });
