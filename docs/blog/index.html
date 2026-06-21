@@ -5,7 +5,6 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>PPO Self-Play on Clash Royale</title>
 	<script src="video-embeds.js" defer></script>
-	<script src="revision-notes.js?v=20260621-7" defer></script>
 	<link rel="stylesheet" href="editorial.css?v=20260621-2" />
 	<link rel="stylesheet" href="blog-config.css" />
 	<style>
@@ -12729,13 +12728,30 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 				<h2 id="386aa1bf-7b79-808d-8071-c7522955bc8b" class="">Additional changes that can be made</h2>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="386aa1bf-7b79-8045-80b3-f8c0ebbbb0c6" class=""><mark class="highlight-blue_background">[TODO:
-						Just add a list of things that I didn’t get time to implement but could potentially improve the
-						performance]</mark></p>
+				<p id="386aa1bf-7b79-8045-80b3-f8c0ebbbb0c6" class="">Several architecture improvements, novel training concepts, and engineering adjustments were identified as high-potential directions for further performance improvements:</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="386aa1bf-7b79-80b5-8892-d612d50fdfe8" class="">
-				</p>
+				<h3 id="additional-deep-sets-improvements">Deep Sets Enhancements</h3>
+			</div>
+			<div style="display:contents" dir="auto">
+				<ul id="additional-deep-sets-list" class="bulleted-list">
+					<li style="list-style-type:disc"><strong>Robust Entity Masking:</strong> Replace the fragile zero-vector masking heuristic (which assumes active entities can never have all-zero feature vectors) with an explicit boolean mask tensor passed directly from the environment to prevent silent unit dropouts.</li>
+					<li style="list-style-type:disc"><strong>Full Transformer Blocks for Deep Sets:</strong> Add a feed-forward network (FFN) block (Linear-GELU-Linear) with residual connections and LayerNorm after the self-attention layer to bring Deep Sets attention to full Transformer expressiveness.</li>
+					<li style="list-style-type:disc"><strong>Configurable Multi-Layer Attention:</strong> Stack multiple attention blocks (e.g., 2 layers) controllable via a <code>num_attention_layers</code> parameter. Ensure strict input validation to avoid silent configuration failures.</li>
+					<li style="list-style-type:disc"><strong>Deduplicated Hand Card Representation:</strong> Remove hand cards and the next card features from trunk flattening when using attention, keeping the dual path optional under an explicit control flag.</li>
+					<li style="list-style-type:disc"><strong>Combined Mean and Max Pooling:</strong> Augment set pooling by concatenating mean-pooled and max-pooled representations to capture both the average battlefield state and extreme outliers (such as the highest-threat unit).</li>
+				</ul>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h3 id="additional-novel-ideas">Novel Architectural Concepts</h3>
+			</div>
+			<div style="display:contents" dir="auto">
+				<ul id="additional-novel-list" class="bulleted-list">
+					<li style="list-style-type:disc"><strong>Spatial Feature Map Encoder:</strong> Represent the arena grid as an 18×32 multi-channel image (encoding HP, side, and troop types), and process it with a CNN before fusing with the entity encoder via cross-attention to provide better spatial inductive bias.</li>
+					<li style="list-style-type:disc"><strong>Explicit Opponent Modeling:</strong> Add an auxiliary prediction head to predict the opponent's next action (skip, card, position), utilizing the gradient to enrich representation learning.</li>
+					<li style="list-style-type:disc"><strong>Temporal Context &amp; Memory:</strong> Add a recurrent unit (LSTM/GRU) or stack frames over the last K observations to break the single-frame reactive limitation and allow the model to learn units' velocity and intent.</li>
+					<li style="list-style-type:disc"><strong>Mixture of Experts (MoE) Trunk:</strong> Replace the standard trunk MLP with a Mixture of Experts layer to dynamically route processing based on the game phase (e.g., defense vs. attack).</li>
+				</ul>
 			</div>
 		</div>
 	</article>
