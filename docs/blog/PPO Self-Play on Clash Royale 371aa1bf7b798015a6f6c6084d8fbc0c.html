@@ -1148,9 +1148,7 @@
 								<p id="simulator-video-limitations" class="">Recorded TV Royale matches are not a direct
 									substitute. Learning from them would require an offline reinforcement learning or
 									imitation learning pipeline, along with reliable extraction of actions, rewards,
-									timing and partially hidden game state from video. SAC would not solve this by
-									itself because it is also an online algorithm, although it can reuse previously
-									collected experience because it is off-policy.</p>
+									timing and partially hidden game state from video.</p>
 							</div>
 							<div style="display:contents" dir="auto">
 								<p id="simulator-debugging-benefits" class="">The simulator also exposes exact actions,
@@ -1220,18 +1218,23 @@
 				<h2 id="371aa1bf-7b79-8042-99d3-c690706071eb" class="">Implementation Details</h2>
 			</div>
 			<div style="display:contents" dir="auto">
+				<h3 id="simulator-implemented-rules" class="">Implemented rules</h3>
+			</div>
+			<div style="display:contents" dir="auto">
+				<ul class="bulleted-list">
+					<li style="list-style-type:disc">Eight Training Camp cards on an 18 by 32 tile arena.</li>
+					<li style="list-style-type:disc">The agents make four decisions per second.</li>
+					<li style="list-style-type:disc">Elixir generation doubles at 2:00, then triples at 3:00.</li>
+					<li style="list-style-type:disc">At 3:00, the simulator enters a custom sudden-death phase. At 5:00,
+						the lowest-health tower determines the tiebreaker.</li>
+				</ul>
+			</div>
+			<div style="display:contents" dir="auto">
 				<ul id="371aa1bf-7b79-8066-abc5-f7604ccfef58" class="bulleted-list">
-					<li style="list-style-type:disc"><strong>Towers and Cards implemented</strong>
+					<li style="list-style-type:disc"><strong>Cards and towers</strong>
 						<div style="display:contents" dir="auto">
-							<p id="371aa1bf-7b79-80c9-a79a-d5840880e605" class="">All crown towers are level 9 and all
-								the cards are level 11. </p>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="371aa1bf-7b79-804b-965c-cc0f47bc2a68" class="bulleted-list">
-								<li style="list-style-type:circle"><strong>Deviation</strong>:<strong> </strong>Didn’t
-									keep it symmetric to encourage focusing on card choice and deployment instead of
-									towers doing the work.</li>
-							</ul>
+							<p id="371aa1bf-7b79-80c9-a79a-d5840880e605" class="">Crown towers use level 9 statistics,
+								while cards use level 11 statistics.</p>
 						</div>
 						<div style="display:contents" dir="auto">
 							<p id="371aa1bf-7b79-80b0-b480-c46e7208e210" class="">Stats picked from the actual game at
@@ -1510,59 +1513,104 @@
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="371aa1bf-7b79-801d-800e-f485c9233966" class="bulleted-list">
-								<li style="list-style-type:circle">2:00 to 3:00 : 2x elixir, sudden death mode</li>
+								<li style="list-style-type:circle">2:00 to 3:00: 2x elixir</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="371aa1bf-7b79-80df-b35e-fba001626653" class="bulleted-list">
-								<li style="list-style-type:circle">3:00 to 5:00 : 3x elixir, overtime mode: whoever
-									breaks a any tower wins <div style="display:contents" dir="auto">
-										<ul id="371aa1bf-7b79-80e9-aa17-cbdcb77fb7e6" class="bulleted-list">
-											<li style="list-style-type:square"><strong>Deviation</strong>: This is
-												unlike the real game where automatically the game is won by the one with
-												most towers. </li>
-										</ul>
-									</div>
-									<div style="display:contents" dir="auto">
-										<ul id="371aa1bf-7b79-80c6-a972-dc26bc7a1827" class="bulleted-list">
-											<li style="list-style-type:square">This was done to see how the gameplay
-												shifts in this mode because even a well doing side would be at a risk of
-												loosing if the game made it to this stage. They may be encouraged to be
-												more aggressive in the early game or choose being very defensive in this
-												mode while allowing the loosing side another chance to redeem the game.
-											</li>
-										</ul>
-									</div>
-								</li>
+								<li style="list-style-type:circle">3:00 to 5:00: 3x elixir and custom sudden death,
+									where destroying any remaining tower ends the game immediately</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="371aa1bf-7b79-8052-a1b6-ef999bac2bb7" class="bulleted-list">
-								<li style="list-style-type:circle">5:00 : max time limit, anyone with minimum hit-points
-									on a tower looses. If equal, then draw.</li>
+								<li style="list-style-type:circle">5:00: the player owning the lowest-health tower
+									loses. Equal minimum health produces a draw.</li>
 							</ul>
 						</div>
 					</li>
 				</ul>
 			</div>
 			<div style="display:contents" dir="auto">
+				<h3 id="simulator-intentional-simplifications" class="">Intentional simplifications</h3>
+			</div>
+			<div style="display:contents" dir="auto">
+				<ul class="bulleted-list">
+					<li style="list-style-type:disc">Card and tower levels are fixed instead of being configurable.</li>
+					<li style="list-style-type:disc">The card pool is restricted to eight Training Camp cards.</li>
+					<li style="list-style-type:disc">Deployment uses a static own-half mask, keeping the position
+						distribution consistent throughout a game.</li>
+					<li style="list-style-type:disc">Movement, collision and targeting physics approximate the official
+						game rather than reproducing it exactly.</li>
+				</ul>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h3 id="simulator-known-defects" class="">Known simulator defects</h3>
+			</div>
+			<div style="display:contents" dir="auto">
 				<ul id="371aa1bf-7b79-8040-84a0-c7e91aee03af" class="bulleted-list">
-					<li style="list-style-type:disc"><strong>Additional deviations from the official CR</strong>
-						<div style="display:contents" dir="auto">
-							<ul id="371aa1bf-7b79-8062-b80b-e58edb55211b" class="bulleted-list">
-								<li style="list-style-type:circle">When a princess tower dies, a partial section of the
-									opponent arena gets unlocked. This wasn’t implemented to simplify learning the
-									deployment-position-network by letting all game states being near homogeneous for
-									it. </li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="371aa1bf-7b79-8005-836a-dc8c2e674ca9" class="bulleted-list">
-								<li style="list-style-type:circle">Spells also can be deployed only on our side of the
-									arena. This is for the same reasons as above.</li>
-							</ul>
-						</div>
+					<li style="list-style-type:disc">Deployable territory does not expand after a princess tower falls.</li>
+					<li style="list-style-type:disc">Spells incorrectly share the troop deployment mask, so they cannot
+						target the opponent half.</li>
+					<li style="list-style-type:disc">Bridge and wall pathfinding can still produce edge-case routes that
+						differ from the official game.</li>
+				</ul>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h3 id="simulator-fidelity-matrix" class="">Fidelity matrix</h3>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<table class="simple-table">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header">Official behavior</th>
+							<th class="simple-table-header-color simple-table-header">Simulator behavior</th>
+							<th class="simple-table-header-color simple-table-header">Reason</th>
+							<th class="simple-table-header-color simple-table-header">Expected learning consequence</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Card and tower levels vary</td>
+							<td>Level 11 cards and level 9 towers</td>
+							<td>Fixed training distribution</td>
+							<td>The policy may depend on this damage and health balance</td>
+						</tr>
+						<tr>
+							<td>Territory expands after a princess tower falls</td>
+							<td>Deployment remains restricted to the original half</td>
+							<td>Simpler position-learning problem</td>
+							<td>No learned post-tower deployment strategy</td>
+						</tr>
+						<tr>
+							<td>Spells can target the opponent side</td>
+							<td>Spells use the own-half troop mask</td>
+							<td>Shared static deployment mask</td>
+							<td>Offensive spell strategies are excluded</td>
+						</tr>
+						<tr>
+							<td>A crown lead ends regulation, tied games enter overtime</td>
+							<td>Every game reaches custom sudden death unless a king tower falls</td>
+							<td>Experimental game rule</td>
+							<td>May alter aggression and comeback incentives</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h3 id="simulator-ablation-plan" class="">Required ablations</h3>
+			</div>
+			<div style="display:contents" dir="auto">
+				<ul class="bulleted-list">
+					<li style="list-style-type:disc"><strong>Tower statistics:</strong> compare symmetric and asymmetric
+						levels with identical seeds. Measure deployment rate, tower damage, game length and win rate.
 					</li>
+					<li style="list-style-type:disc"><strong>Sudden death:</strong> compare the custom rule with standard
+						regulation and overtime resolution. Measure pre-3:00 damage, termination rate and strategy
+						diversity.</li>
+					<li style="list-style-type:disc"><strong>Deployment masks:</strong> compare the static mask with
+						tower-dependent territory unlock. Test spell targeting separately because spells should not
+						share troop restrictions.</li>
 				</ul>
 			</div>
 			<div style="display:contents" dir="auto">

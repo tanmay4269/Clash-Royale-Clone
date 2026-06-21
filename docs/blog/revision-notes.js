@@ -1,20 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
 	const revisions = [
 		{
-			id: "371aa1bf-7b79-80c6-99c1-dbbc32dc787d",
-			context: "The Simulator",
-			html: `
-				<h4>Required corrections</h4>
-				<ul>
-					<li>Replace the claim that SAC could learn directly from gameplay videos. SAC is an online, off-policy algorithm. Learning from recorded matches would require an offline-RL or imitation-learning pipeline, plus reliable extraction of state, action, reward, timing and hidden information from video.</li>
-					<li>Explain that a simulator was required specifically because PPO needs fresh on-policy interaction. The simulator also gives exact actions, rewards, terminal states and privileged debugging information that TV Royale footage does not provide.</li>
-					<li>State the scope honestly: this is a performant RL playground inspired by Clash Royale, not a faithful clone. That framing matches the repository README and makes the later deviations easier to justify.</li>
-				</ul>
-				<h4>My suggested addition</h4>
-				<p>Add a compact diagram showing: policy action, Gymnasium wrapper, simulator transition, observation and reward. This would connect the introductory explanation to the implementation sections immediately.</p>
-			`,
-		},
-		{
 			id: "371aa1bf-7b79-8042-99d3-c690706071eb",
 			context: "Implementation Details",
 			html: `
