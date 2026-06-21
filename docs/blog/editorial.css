@@ -833,3 +833,8 @@ body:has(.media-lightbox[open]) {
 		transition: none !important;
 	}
 }
+
+/* Fix text selection inside display:contents wrapper divs */
+div[style*="display:contents"] {
+	display: block !important;
+}
