@@ -1,33 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
 	const revisions = [
 		{
-			id: "382aa1bf-7b79-80db-b27d-ed807ec9c0cd",
-			context: "Ablations",
-			html: `
-				<h4>Use a short, high-leverage ablation matrix</h4>
-				<ul>
-					<li><strong>Simulator fidelity:</strong> symmetric towers, standard versus custom overtime, dynamic territory unlock, spell-specific targeting and corrected bridge pathing.</li>
-					<li><strong>Reward:</strong> outcome only, plus HP damage, plus destruction reward and plus step penalty. Log reward components and termination rate.</li>
-					<li><strong>Network:</strong> shared versus disjoint actor-critic, ReLU versus Tanh, linear versus CNN position head, unconditional versus card-conditioned position head, pointer decoder, entity attention and Transformer.</li>
-					<li><strong>Training:</strong> gamma 0.99 versus 0.997, minibatch 2,048 versus 256, KL early stopping, forced-skip removal and rollout games per update.</li>
-				</ul>
-				<h4>Existing evidence to retain, with calibrated claims</h4>
-				<ul>
-					<li>Gamma 0.997 substantially improved the scripted-bot setting in run 12.</li>
-					<li>The step-penalty results conflict across runs 13 and 19, so no conclusion is established.</li>
-					<li>KL early stopping and 120 maximum epochs underperformed run 16 in runs 17 and 21.</li>
-					<li>Running advantage normalization collapsed behavior in run 18.</li>
-					<li>A 100-game rollout buffer performed poorly in run 20.</li>
-					<li>Minibatch size 256 improved the run-16 family in run 22.</li>
-					<li>Elixir-based card masking and forced skip produced the largest clean behavioral jump in run 16.</li>
-				</ul>
-				<h4>Protocol</h4>
-				<p>Use matched seeds, identical environment versions, equal environment steps and frozen evaluation opponents. Report mean and uncertainty across seeds. For architecture comparisons, also match parameter count or report it explicitly.</p>
-				<h4>My suggested addition</h4>
-				<p>Prioritize ablations that challenge the article’s strongest claims. In particular, decompose the run-25 to run-26 architecture bundle and directly test whether the visually engaging Deep Sets policy is actually stronger than the Transformer in head-to-head games.</p>
-			`,
-		},
-		{
 			id: "371aa1bf-7b79-804d-8f69-eeb3d77ee85f",
 			context: "Appendix",
 			html: `

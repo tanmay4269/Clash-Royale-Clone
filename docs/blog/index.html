@@ -2367,12 +2367,6 @@
 					improved some curves but did not materially change the termination-to-truncation ratio. The default
 					therefore remains <code>0.0</code>.</p>
 			</div>
-			<div class="section-callout-danger" dir="auto">
-				<h4>Required reward ablation</h4>
-				<p>Compare outcome only, outcome plus HP damage, outcome plus destruction bonus, and the full reward.
-					Log HP-delta, destruction, outcome and step-penalty contributions separately. Changes to the
-					destruction bonus or damage scale should be tested here rather than silently adopted.</p>
-			</div>
 			<div style="display:contents" dir="auto">
 				<h3 id="386aa1bf-7b79-8059-aec7-eb19ad52288a" class="">Performance Optimisation</h3>
 			</div>
@@ -3448,27 +3442,249 @@ Outputs
 				<h1 id="382aa1bf-7b79-80db-b27d-ed807ec9c0cd" class="">Ablations</h1>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="382aa1bf-7b79-8085-ae6d-f167f5729845" class="bulleted-list">
-					<li style="list-style-type:disc">TODOs: <div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-806b-b8aa-c8bcaa43b6ff" class="bulleted-list">
-								<li style="list-style-type:circle">Ablations between important components</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-809f-a564-c994b657aaa3" class="bulleted-list">
-								<li style="list-style-type:circle">Do the same elo pool based results but vs a baseline
-									model for fair comparision</li>
-							</ul>
-						</div>
-					</li>
-				</ul>
+				<p>Each ablation changes one component relative to a fixed baseline. The main result is playing strength:
+					the ablated checkpoint and baseline are placed in the same evaluation pool, initialized at the same
+					Elo and given equal games from both player sides.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="386aa1bf-7b79-8079-a234-fbdbb07c9ab2" class="">
-				</p>
+				<h4>Simulator fidelity</h4>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<table class="simple-table" style="table-layout:fixed;width:100%;font-size:0.88em">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header" style="width:170px">Ablation</th>
+							<th class="simple-table-header-color simple-table-header">Comparison</th>
+							<th class="simple-table-header-color simple-table-header">What it tests</th>
+							<th class="simple-table-header-color simple-table-header" style="width:180px">Status / evidence</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Tower symmetry</td>
+							<td>Current symmetric towers versus asymmetric tower levels.</td>
+							<td>Whether simplified equal towers improve learning or merely change the dominant strategy.</td>
+							<td><strong>TODO</strong></td>
+						</tr>
+						<tr>
+							<td>Overtime rules</td>
+							<td>Current custom sudden death versus standard regulation and overtime resolution.</td>
+							<td>Whether ending the game after any overtime tower loss creates a useful or misleading objective.</td>
+							<td><strong>TODO</strong></td>
+						</tr>
+						<tr>
+							<td>Deployment territory</td>
+							<td>Fixed own-half deployment versus unlocking territory after a princess tower falls.</td>
+							<td>Whether dynamic territory materially changes learned placement and comeback strategies.</td>
+							<td><strong>TODO</strong></td>
+						</tr>
+						<tr>
+							<td>Spell targeting</td>
+							<td>Current shared deployment mask versus spell-specific targeting rules.</td>
+							<td>Whether excluding offensive spell placement changes card usage and policy strength.</td>
+							<td><strong>TODO</strong></td>
+						</tr>
+						<tr>
+							<td>Bridge pathing</td>
+							<td>Previous bridge behavior versus corrected bridge-edge and wall pathing.</td>
+							<td>Whether policies learned around simulator pathfinding artifacts.</td>
+							<td><strong>TODO</strong></td>
+						</tr>
+					</tbody>
+				</table>
 			</div>
 			<div style="display:contents" dir="auto">
-				<hr id="386aa1bf-7b79-802f-b175-c7fe48db762a" />
+				<h4>Reward</h4>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<table class="simple-table" style="table-layout:fixed;width:100%;font-size:0.88em">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header" style="width:170px">Variant</th>
+							<th class="simple-table-header-color simple-table-header">Included reward</th>
+							<th class="simple-table-header-color simple-table-header">Purpose</th>
+							<th class="simple-table-header-color simple-table-header" style="width:220px">Status / evidence</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Outcome only</td>
+							<td>Win, draw or loss.</td>
+							<td>Provides the unbiased sparse-reward baseline.</td>
+							<td><strong>TODO</strong></td>
+						</tr>
+						<tr>
+							<td>Outcome plus HP damage</td>
+							<td>Terminal outcome and tower-health deltas.</td>
+							<td>Tests whether dense damage feedback accelerates learning.</td>
+							<td><strong>TODO</strong></td>
+						</tr>
+						<tr>
+							<td>Outcome plus destruction</td>
+							<td>Terminal outcome and tower-destruction bonus.</td>
+							<td>Separates discrete objective progress from continuous HP shaping.</td>
+							<td><strong>TODO</strong></td>
+						</tr>
+						<tr>
+							<td>Full reward</td>
+							<td>Outcome, HP damage and tower destruction.</td>
+							<td>Tests whether combining both shaping terms improves final playing strength.</td>
+							<td><strong>TODO</strong></td>
+						</tr>
+						<tr>
+							<td>Full reward plus step penalty</td>
+							<td>Full reward with the per-step penalty enabled.</td>
+							<td>Tests whether encouraging shorter games increases decisive wins or distorts play.</td>
+							<td><strong>TODO</strong>. Existing evidence is inconclusive: run 13 was slightly worse,
+								while run 19 did not materially change termination versus truncation.</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p>Log HP-delta, tower-destruction, terminal-outcome and step-penalty contributions separately, alongside
+					win rate, termination rate and episode duration.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Network</h4>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<table class="simple-table" style="table-layout:fixed;width:100%;font-size:0.88em">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header" style="width:170px">Ablation</th>
+							<th class="simple-table-header-color simple-table-header">Comparison</th>
+							<th class="simple-table-header-color simple-table-header">Question</th>
+							<th class="simple-table-header-color simple-table-header" style="width:220px">Status / evidence</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Actor-critic sharing</td>
+							<td>Shared encoder and trunk versus disjoint actor and critic.</td>
+							<td>Does avoiding actor-critic gradient interference justify the additional compute?</td>
+							<td><strong>TODO</strong></td>
+						</tr>
+						<tr>
+							<td>Activation</td>
+							<td>ReLU versus Tanh.</td>
+							<td>Is bounded activation important for PPO stability in this environment?</td>
+							<td><strong>TODO</strong></td>
+						</tr>
+						<tr>
+							<td>Position decoder</td>
+							<td>Linear 576-way head versus transposed-convolution decoder.</td>
+							<td>Does explicit spatial output structure improve deployment quality?</td>
+							<td><strong>TODO</strong></td>
+						</tr>
+						<tr>
+							<td>Card-conditioned position</td>
+							<td>Position prediction from global state only versus global state plus selected-card embedding.</td>
+							<td>Does explicitly conditioning placement on card identity improve decisions?</td>
+							<td><strong>TODO</strong></td>
+						</tr>
+						<tr>
+							<td>Pointer decoder</td>
+							<td>Linear skip and card heads versus pointer scoring over the available hand.</td>
+							<td>Does card-content-based selection outperform fixed hand-slot logits?</td>
+							<td><strong>TODO</strong>. Run 28 appeared worse than run 27, but it was not a controlled,
+								multi-seed or head-to-head comparison.</td>
+						</tr>
+						<tr>
+							<td>Entity attention</td>
+							<td>Deep Sets without attention versus one entity self-attention layer.</td>
+							<td>Does contextualizing entities before pooling improve strength?</td>
+							<td><strong>TODO</strong>. Run 30 appeared stronger than run 27 from training curves, but
+								the checkpoints were not evaluated directly.</td>
+						</tr>
+						<tr>
+							<td>Representation</td>
+							<td>Deep Sets versus Transformer.</td>
+							<td>Does retaining every entity token outperform pooled set summaries?</td>
+							<td><strong>TODO</strong>. Runs 30 and 31 had similar self-play scores but different Elo,
+								entropy and gameplay. Separate training pools prevent a strength conclusion.</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p>Architecture comparisons must report parameter count and inference cost. Prefer parameter-matched
+					variants where possible.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Training</h4>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<table class="simple-table" style="table-layout:fixed;width:100%;font-size:0.88em">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header" style="width:170px">Ablation</th>
+							<th class="simple-table-header-color simple-table-header">Comparison</th>
+							<th class="simple-table-header-color simple-table-header">Question</th>
+							<th class="simple-table-header-color simple-table-header" style="width:230px">Status / evidence</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Discount factor</td>
+							<td><code>γ = 0.99</code> versus <code>γ = 0.997</code>.</td>
+							<td>Does the longer effective horizon improve long-term credit assignment?</td>
+							<td><strong>TODO</strong> controlled rerun. Run 12 showed a substantial improvement with
+								<code>0.997</code> against the scripted bot.</td>
+						</tr>
+						<tr>
+							<td>Minibatch size</td>
+							<td><code>2,048</code> versus <code>256</code>.</td>
+							<td>Do smaller, noisier gradient batches improve optimization?</td>
+							<td><strong>TODO</strong> controlled rerun. Run 22 improved over the run-16 family with
+								minibatch size <code>256</code>.</td>
+						</tr>
+						<tr>
+							<td>KL early stopping</td>
+							<td>Disabled versus threshold <code>0.01</code>.</td>
+							<td>Does limiting policy movement improve stability or underuse each rollout?</td>
+							<td><strong>TODO</strong> controlled rerun. Run 17 underperformed run 16; run 21 also failed
+								after increasing maximum epochs.</td>
+						</tr>
+						<tr>
+							<td>Advantage normalization</td>
+							<td>Per-minibatch normalization versus running mean and standard deviation.</td>
+							<td>Does a stable global scale help, or does stale normalization distort current rollouts?</td>
+							<td><strong>TODO</strong> controlled rerun. Running normalization collapsed behavior in run
+								18.</td>
+						</tr>
+						<tr>
+							<td>Elixir action masking</td>
+							<td>Allow all card actions versus mask unaffordable cards and force skip when necessary.</td>
+							<td>How much does removing impossible actions improve exploration and policy learning?</td>
+							<td><strong>TODO</strong> controlled rerun. The masking change produced the largest recorded
+								behavioral improvement in run 16.</td>
+						</tr>
+						<tr>
+							<td>Forced-skip removal</td>
+							<td>Keep versus remove transitions where no card is affordable.</td>
+							<td>Does removing non-choice steps help the actor more than it harms value learning?</td>
+							<td><strong>TODO</strong>. Run 20 performed poorly, but forced-skip removal was bundled with
+								a 100-game rollout.</td>
+						</tr>
+						<tr>
+							<td>Rollout length</td>
+							<td>Vary games collected per PPO update.</td>
+							<td>What balance of data diversity, update frequency and early-data waste works best?</td>
+							<td><strong>TODO</strong>. Run 20's 100-game rollout performed poorly, but it also enabled
+								forced-skip removal.</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Ablation protocol</h4>
+				<p>Use identical environment versions, training steps, reward settings and matched seeds. Change one
+					component at a time and train at least three seeds per variant. Freeze the final checkpoints, then
+					evaluate the ablated variant and baseline in the same Elo pool with equal games and both player-side
+					assignments. Report mean and uncertainty across seeds.</p>
+				<p>Prioritize the bundled run-25 to run-26 changes, then the pointer decoder, entity attention and
+					Deep Sets versus Transformer comparisons. Training curves alone do not complete a TODO.</p>
 			</div>
 			<div style="display:contents" dir="auto">
 				<h1 id="371aa1bf-7b79-804d-8f69-eeb3d77ee85f" class="">Appendix</h1>
