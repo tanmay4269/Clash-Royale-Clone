@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>PPO Self-Play on Clash Royale</title>
 	<script src="video-embeds.js" defer></script>
-	<script src="revision-notes.js?v=20260621-3" defer></script>
+	<script src="revision-notes.js?v=20260621-7" defer></script>
 	<link rel="stylesheet" href="editorial.css?v=20260621-2" />
 	<link rel="stylesheet" href="blog-config.css" />
 	<style>
@@ -4525,6 +4525,16 @@ Outputs
 				</figure>
 			</div>
 			<div style="display:contents" dir="auto">
+				<p>This project is more precisely a partially observable MDP. The simulator state may be Markov, but the
+					agent cannot observe the opponent's hand or elixir, so its current input is not sufficient to recover
+					the full state. The feed-forward policy is therefore reactive: it chooses an action from only the
+					current observation.</p>
+				<p>Frame stacking, recurrent memory and opponent modeling are natural extensions because they could use
+					recent behavior to infer hidden information. In the terminology below, <code>s_t</code> should be
+					read as the observation available to the policy unless the full simulator state is explicitly
+					mentioned.</p>
+			</div>
+			<div style="display:contents" dir="auto">
 				<h3 id="371aa1bf-7b79-80a2-957f-e3bbb6331d6e" class="">REINFORCE Algorithm</h3>
 			</div>
 			<div style="display:contents" dir="auto">
@@ -4714,6 +4724,11 @@ Outputs
 													class="delimsizing size4">]</span></span></span></span></span></span></span>
 					</div>
 				</figure>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p>The objective uses the same discounting as the return defined above. More explicitly,
+					<code>J(θ) = E[Σₜ γᵗrₜ]</code>. The displayed <code>Σₜrₜ</code> is only valid for the special case
+					<code>γ = 1</code>.</p>
 			</div>
 			<div style="display:contents" dir="auto">
 				<p id="371aa1bf-7b79-808d-8f07-dd3d890d0933" class="">Where <style>
@@ -7831,7 +7846,7 @@ M347 1759 V0 H263 V1759 v2400 v1759 h84z" />
 				</figure>
 			</div>
 			<div style="display:contents" dir="auto">
-				<h3 id="371aa1bf-7b79-8095-b06b-efe47106eb90" class="">The Algorithm</h3>
+				<h4 id="371aa1bf-7b79-8095-b06b-efe47106eb90" class="">The Algorithm</h3>
 			</div>
 			<div style="display:contents" dir="auto">
 				<p id="371aa1bf-7b79-80dd-a966-f1e0e97dac36" class="">Estimate the gradient with a single sampled
@@ -8225,7 +8240,7 @@ M347 1759 V0 H263 V1759 v2400 v1759 h84z" />
 				</ol>
 			</div>
 			<div style="display:contents" dir="auto">
-				<h2 id="371aa1bf-7b79-809e-82cb-f304083f8039" class="">Actor Critic Algorithm (A2C)</h2>
+				<h3 id="371aa1bf-7b79-809e-82cb-f304083f8039" class="">Actor Critic Algorithm (A2C)</h2>
 			</div>
 			<div style="display:contents" dir="auto">
 				<p id="371aa1bf-7b79-8091-924c-f51f87328dde" class="">REINFORCE uses <style>
@@ -9172,7 +9187,7 @@ M347 1759 V0 H263 V1759 v2400 v1759 h84z" />
 					being imperfect.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<h3 id="371aa1bf-7b79-80a1-ad6f-ed24311367ec" class="">The Algorithm</h3>
+				<h4 id="371aa1bf-7b79-80a1-ad6f-ed24311367ec" class="">The Algorithm</h3>
 			</div>
 			<div style="display:contents" dir="auto">
 				<figure id="371aa1bf-7b79-80b1-9083-e43a542e299e" class="equation">
@@ -9706,7 +9721,7 @@ M347 1759 V0 H263 V1759 v2400 v1759 h84z" />
 					learns how well the actor is performing by estimating the value function. </p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<h3 id="371aa1bf-7b79-8032-9e5e-dd202fc82017" class="">Entropy Regularisation</h3>
+				<h4 id="371aa1bf-7b79-8032-9e5e-dd202fc82017" class="">Entropy Regularisation</h3>
 			</div>
 			<div style="display:contents" dir="auto">
 				<figure id="371aa1bf-7b79-80ae-8621-c838fb050184" class="equation">
@@ -10049,7 +10064,13 @@ M347 1759 V0 H263 V1759 v2400 v1759 h84z" />
 				</figure>
 			</div>
 			<div style="display:contents" dir="auto">
-				<h2 id="371aa1bf-7b79-80c1-a3b0-c79218b80e66" class="">PPO Algorithm</h2>
+				<p>Although actor-critic diagrams often share one backbone, the implemented default uses disjoint actor
+					and critic networks. This prevents value-loss gradients from reshaping features used to choose
+					actions, and prevents policy updates from destabilizing the value representation. The tradeoff is
+					nearly twice the representation compute and parameter count.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h3 id="371aa1bf-7b79-80c1-a3b0-c79218b80e66" class="">PPO Algorithm</h2>
 			</div>
 			<div style="display:contents" dir="auto">
 				<p id="371aa1bf-7b79-8076-8ddc-d728de333b19" class="">One of the biggest issues with A2C now is its
@@ -10063,6 +10084,13 @@ M347 1759 V0 H263 V1759 v2400 v1759 h84z" />
 			<div style="display:contents" dir="auto">
 				<p id="371aa1bf-7b79-8069-b50a-e9316156250b" class="">While collecting transitions, save the
 					<code>log_probs</code> of the old policy and evaluate the following ratio:</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p>Here, the probability of a complete action follows the action's conditional structure. The joint log
+					probability is the skip log probability plus the card and position log probabilities only when the
+					agent does not skip. On skip steps, card and position choices are irrelevant and contribute zero.
+					Entropy is combined in the same way, preventing irrelevant card and position entropy from dominating
+					skip actions.</p>
 			</div>
 			<div style="display:contents" dir="auto">
 				<figure id="371aa1bf-7b79-805a-9c94-e45670a649f2" class="equation">
@@ -10714,7 +10742,7 @@ M347 1759 V0 H263 V1759 v2400 v1759 h84z" />
 				</ol>
 			</div>
 			<div style="display:contents" dir="auto">
-				<h3 id="371aa1bf-7b79-8032-8927-d1ee0806d0e5" class="">The Algorithm</h3>
+				<h4 id="371aa1bf-7b79-8032-8927-d1ee0806d0e5" class="">The Algorithm</h3>
 			</div>
 			<div style="display:contents" dir="auto">
 				<ol type="1" id="371aa1bf-7b79-8002-be7c-e744f3825657" class="numbered-list" start="1">
@@ -10723,8 +10751,9 @@ M347 1759 V0 H263 V1759 v2400 v1759 h84z" />
 			</div>
 			<div style="display:contents" dir="auto">
 				<ol type="1" id="371aa1bf-7b79-801d-8ef4-f046dcc0911c" class="numbered-list" start="2">
-					<li>Randomly sample mini-batches to abide by the IID sample assumption most optimisers like SGD or
-						ADAM demand.</li>
+					<li>Compute GAE backwards on each ordered trajectory, then shuffle transitions into random
+						mini-batches. Shuffling reduces correlation, but SGD and Adam do not require perfectly IID
+						samples. The ordering requirement belongs to GAE, which must be computed before shuffling.</li>
 				</ol>
 			</div>
 			<div style="display:contents" dir="auto">
@@ -12087,35 +12116,99 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 				</figure>
 			</div>
 			<div style="display:contents" dir="auto">
-				<h2 id="386aa1bf-7b79-8026-8c08-fe9c063359b5" class="">Simulator Profiling</h2>
+				<p>In the implementation, advantages are normalized to zero mean and unit variance within each
+					mini-batch. Return normalization is optional and uses rollout-level statistics, while observation
+					normalization is a separate optional feature based on running statistics.</p>
+				<p>The optimized loss uses the clipped policy objective, an unclipped critic mean squared error
+					<code>MSE(return, value)</code>, and an entropy bonus. The squared-advantage critic term shown above
+					is only a simplified actor-critic form, not the implemented critic target. Optional KL early stopping
+					can end the remaining PPO epochs when approximate KL exceeds <code>kl_threshold</code>. It is an
+					additional safeguard, not part of the base clipped objective.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="386aa1bf-7b79-8050-8d36-f79fa48c8c3f" class=""><mark
-						class="highlight-blue_background">[TODO]</mark></p>
+				<h4>Notation and implementation names</h4>
+				<table class="simple-table">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header">Symbol</th>
+							<th class="simple-table-header-color simple-table-header">Implementation name</th>
+							<th class="simple-table-header-color simple-table-header">Meaning</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>γ</code></td>
+							<td><code>gae_gamma</code></td>
+							<td>Reward discount used in the TD error and GAE recursion.</td>
+						</tr>
+						<tr>
+							<td><code>λ</code></td>
+							<td><code>gae_lambda</code></td>
+							<td>GAE bias-variance interpolation factor.</td>
+						</tr>
+						<tr>
+							<td><code>ε</code></td>
+							<td><code>ppo_clip</code></td>
+							<td>Clips the policy ratio to <code>[1 - ε, 1 + ε]</code>.</td>
+						</tr>
+						<tr>
+							<td><code>c₁</code></td>
+							<td><code>critic_loss_coef</code></td>
+							<td>Weight applied to the critic mean squared error.</td>
+						</tr>
+						<tr>
+							<td><code>c₂</code></td>
+							<td><code>entropy_loss_coef</code></td>
+							<td>Current entropy-bonus weight, scheduled between the configured initial and final values.</td>
+						</tr>
+						<tr>
+							<td><code>V(sₜ)</code></td>
+							<td><code>values</code></td>
+							<td>Critic prediction for the current observation.</td>
+						</tr>
+						<tr>
+							<td><code>Âₜ</code></td>
+							<td><code>advantages</code></td>
+							<td>GAE estimate, normalized per mini-batch before the policy loss.</td>
+						</tr>
+						<tr>
+							<td><code>Rₜ</code></td>
+							<td><code>returns</code></td>
+							<td>Critic target computed as advantage plus value before normalization.</td>
+						</tr>
+						<tr>
+							<td><code>rₜ(θ)</code></td>
+							<td><code>ratio</code></td>
+							<td>Exponentiated difference between new and stored old log probabilities.</td>
+						</tr>
+					</tbody>
+				</table>
 			</div>
 			<div style="display:contents" dir="auto">
-				<h2 id="371aa1bf-7b79-8059-9ed3-c5bf6af32da5" class="">Experiments from start to end: How did the model
-					and training evolve</h2>
+				<h2 id="371aa1bf-7b79-8059-9ed3-c5bf6af32da5" class="">How the model and training evolved</h2>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h3>Pipeline debugging: runs 1 to 6</h3>
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-80ba-b788-e015794ccc78" class="bulleted-list">
-					<li style="list-style-type:disc">initially there were just 3 cards: knight, mini pekka and giant.
-						position net was also just a <code>Linear</code> instead of being a <code>CNN</code></li>
+					<li style="list-style-type:disc">Run 1: used only three cards, Knight, Mini P.E.K.K.A. and Giant.
+						The position head was a <code>Linear</code> layer rather than a <code>CNN</code>.</li>
 				</ul>
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-80d4-ac9d-dc5910918834" class="bulleted-list">
-					<li style="list-style-type:disc">run 2: as training progressed, the models proffered “no play” as a
-						dominant strategy<div style="display:contents" dir="auto">
+					<li style="list-style-type:disc">Run 2: both agents converged on “no play” as the dominant
+						strategy.<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80a9-93d9-ee0e9fc809d3" class="bulleted-list">
-								<li style="list-style-type:circle">this was because the self play sampling was exactly
-									the same model</li>
+								<li style="list-style-type:circle">Cause: self-play always used the current model as its
+									own opponent.</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-806b-9d18-c9c4e64fd15c" class="bulleted-list">
-								<li style="list-style-type:circle">this was fixed by adding an opponent pool and
-									sampling across various opponents </li>
+								<li style="list-style-type:circle">Fix: added an opponent pool and sampled across
+									multiple checkpoints.</li>
 							</ul>
 						</div>
 					</li>
@@ -12123,7 +12216,7 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-80b4-86b9-efea129996cd" class="bulleted-list">
-					<li style="list-style-type:disc">run 3: entropy collapse = broken training<div
+					<li style="list-style-type:disc">Run 3: entropy collapsed and training stalled.<div
 							style="display:contents" dir="ltr">
 							<figure id="386aa1bf-7b79-80f9-96d2-ca1e2d49beda" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/CleanShot_2026-06-21_at_07.38.422x.png"><img
@@ -12133,16 +12226,16 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8069-9b9d-f1fa842fb4f1" class="bulleted-list">
-								<li style="list-style-type:circle">this happened because <code>entropy_weight</code> was
-									too low, hence raising it from <code>0.005 -&gt; 0.05</code> helped</li>
+								<li style="list-style-type:circle">The next configuration raised
+									<code>entropy_weight</code> from <code>0.005</code> to <code>0.05</code>.</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80c3-9d27-efe32696006c" class="bulleted-list">
-								<li style="list-style-type:circle">additionally, just 2-4 games were in a buffer, which
-									is too low. standard rule of thumb is 10 to 100 before each ppo update. also raised
-									the minibatch size. both of these make the ppo updates more diverse hence
-									encouraging better training stability</li>
+								<li style="list-style-type:circle">Only 2 to 4 games were collected per buffer. Later
+									configurations increased rollout size toward the 10 to 100 game range, added
+									parallel collection, and raised the minibatch size. These changes were bundled, so
+									recovery cannot be attributed to entropy weight alone.</li>
 							</ul>
 						</div>
 					</li>
@@ -12150,7 +12243,7 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-802c-b4a2-e43f9ea04aa1" class="bulleted-list">
-					<li style="list-style-type:disc">run 4: playing against a randomly playing agent (overfit test)<div
+					<li style="list-style-type:disc">Run 4: trained against a random agent as an overfit test.<div
 							style="display:contents" dir="ltr">
 							<figure id="386aa1bf-7b79-8065-a25e-f0d067bc00a9" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/CleanShot_2026-06-21_at_07.45.052x.png"><img
@@ -12160,16 +12253,15 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8064-b7b8-f41f8f101cec" class="bulleted-list">
-								<li style="list-style-type:circle">notable points: <div style="display:contents"
+								<li style="list-style-type:circle">Observations:<div style="display:contents"
 										dir="auto">
 										<ul id="386aa1bf-7b79-80fe-87a5-c6ac9ae1f724" class="bulleted-list">
-											<li style="list-style-type:square">ema score never past 0.6 → not good</li>
+											<li style="list-style-type:square">EMA score never exceeded 0.6.</li>
 										</ul>
 									</div>
 									<div style="display:contents" dir="auto">
 										<ul id="386aa1bf-7b79-805e-903f-e7ff39d48091" class="bulleted-list">
-											<li style="list-style-type:square">oscillating elo, losses, entropy → not
-												good</li>
+											<li style="list-style-type:square">Elo, loss and entropy oscillated.</li>
 										</ul>
 									</div>
 								</li>
@@ -12180,25 +12272,26 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-8086-bb3e-fbbfd6808ec2" class="bulleted-list">
-					<li style="list-style-type:disc">run 6:<div style="display:contents" dir="auto">
+					<li style="list-style-type:disc">Run 6:<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80d8-b59a-e2cc041ab420" class="bulleted-list">
-								<li style="list-style-type:circle">changes from run 4:<div style="display:contents"
+								<li style="list-style-type:circle">Changes from run 4:<div style="display:contents"
 										dir="auto">
 										<ul id="386aa1bf-7b79-80d1-b057-d0d32d2c983f" class="bulleted-list">
-											<li style="list-style-type:square">entropy masks deck and pos component when
-												skipping</li>
+											<li style="list-style-type:square">Excluded card and position entropy on
+												skip actions.</li>
 										</ul>
 									</div>
 									<div style="display:contents" dir="auto">
 										<ul id="386aa1bf-7b79-8057-b1a5-e1094ce963bf" class="bulleted-list">
-											<li style="list-style-type:square">reward redesigned with: tower hp deltas
-												(1.0 - 2.0) + tower kill bonus (0.5) + game outcome (5.0)</li>
+											<li style="list-style-type:square">Redesigned reward: tower HP deltas
+												(<code>1.0</code> to <code>2.0</code>), tower kill bonus
+												(<code>0.5</code>) and game outcome (<code>5.0</code>).</li>
 										</ul>
 									</div>
 									<div style="display:contents" dir="auto">
 										<ul id="386aa1bf-7b79-8048-be02-ee4b3f7c3ebe" class="bulleted-list">
-											<li style="list-style-type:square">minibatch based advantage normalisation
-											</li>
+											<li style="list-style-type:square">Added per-minibatch advantage
+												normalization.</li>
 										</ul>
 									</div>
 								</li>
@@ -12213,23 +12306,26 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80d9-ad27-c8f1a3ea3598" class="bulleted-list">
-								<li style="list-style-type:circle">EV &lt; 0.5 = the model just isn’t able to learn.
-									Rest all metric are pretty bad too.</li>
+								<li style="list-style-type:circle">Explained variance stayed below 0.5, and the other
+									metrics remained poor.</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80f0-ae67-c4f0fe6e9aeb" class="bulleted-list">
-								<li style="list-style-type:circle">im pretty confused at this point… nothing seems to
-									help the model learn the game!</li>
+								<li style="list-style-type:circle">At this point, none of the changes had produced
+									reliable learning.</li>
 							</ul>
 						</div>
 					</li>
 				</ul>
 			</div>
 			<div style="display:contents" dir="auto">
+				<h3>Fixed-opponent validation: runs 7 to 13</h3>
+			</div>
+			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-8068-b447-f05d2a2a821e" class="bulleted-list">
-					<li style="list-style-type:disc">run 9: against a scripted bot that only plays knight on left and
-						right lane alternatingly<div style="display:contents" dir="ltr">
+					<li style="list-style-type:disc">Run 9: trained against a scripted bot that alternated Knight
+						placements between the left and right lanes.<div style="display:contents" dir="ltr">
 							<figure id="386aa1bf-7b79-805a-86b7-c42295bf7c24" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/CleanShot_2026-06-21_at_07.52.452x.png"><img
 										style="width:3362px"
@@ -12238,16 +12334,16 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-808b-94c6-c1f7b9287555" class="bulleted-list">
-								<li style="list-style-type:circle">still no signs of improvement…</li>
+								<li style="list-style-type:circle">Still showed no clear improvement.</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8011-ab12-f8e169fd0b8e" class="bulleted-list">
-								<li style="list-style-type:circle">issues in my opinion:<div style="display:contents"
+								<li style="list-style-type:circle">Working hypothesis:<div style="display:contents"
 										dir="auto">
 										<ul id="386aa1bf-7b79-8024-9559-e4ed19dab0e5" class="bulleted-list">
-											<li style="list-style-type:square">critic loss is spiky, and thats coz
-												reward isnt in 0-1, just doing that will fix a lot i think</li>
+											<li style="list-style-type:square">Critic loss was spiky. Reward scale was
+												a suspected cause, but this was not isolated or demonstrated.</li>
 										</ul>
 									</div>
 								</li>
@@ -12258,7 +12354,8 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-8097-89a5-f5afafc0c3b8" class="bulleted-list">
-					<li style="list-style-type:disc">run 12: <code>gae_gamma</code> changed from 0.99 → 0.997<div
+					<li style="list-style-type:disc">Run 12: changed <code>gae_gamma</code> from <code>0.99</code> to
+						<code>0.997</code>.<div
 							style="display:contents" dir="ltr">
 							<figure id="386aa1bf-7b79-802f-aa97-de84dc13a08c" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/CleanShot_2026-06-21_at_07.58.332x.png"><img
@@ -12268,7 +12365,7 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8086-924b-cac8009c7d10" class="bulleted-list">
-								<li style="list-style-type:circle">significantly better!</li>
+								<li style="list-style-type:circle">Performance improved substantially.</li>
 							</ul>
 						</div>
 					</li>
@@ -12276,7 +12373,7 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-8041-a8ce-dc40c0f31a46" class="bulleted-list">
-					<li style="list-style-type:disc">run 13: step penalty = 0.001<div style="display:contents"
+					<li style="list-style-type:disc">Run 13: added a <code>0.001</code> step penalty.<div style="display:contents"
 							dir="ltr">
 							<figure id="386aa1bf-7b79-809d-8eb2-d284c25a21a8" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/CleanShot_2026-06-21_at_08.00.002x.png"><img
@@ -12286,7 +12383,8 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8056-8436-e64c5cabf5ba" class="bulleted-list">
-								<li style="list-style-type:circle">slightly worse, dropped step penalty</li>
+								<li style="list-style-type:circle">Performed slightly worse, so the step penalty was
+									removed.</li>
 							</ul>
 						</div>
 					</li>
@@ -12294,20 +12392,19 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-80ed-9a68-d7cc86bf3010" class="bulleted-list">
-					<li style="list-style-type:disc">remark: at this point i think i can conclude
-						<code>vs-scripted</code> is solved... we are able to solve it with very high score so we can now
-						move to <code>vs-random</code> opponent<div style="display:contents" dir="auto">
+					<li style="list-style-type:disc">Milestone: the agent reached a high score against the scripted
+						opponent, so training moved to <code>vs-random</code>.<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8011-865c-cffc22a38976" class="bulleted-list">
-								<li style="list-style-type:circle">below is the video of the run-13 at about 1.8M mark
+								<li style="list-style-type:circle">Run 13 gameplay at approximately 1.8 million steps.
 								</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80ec-a9d6-d531dcf93f4e" class="bulleted-list">
-								<li style="list-style-type:circle">note that the scripted player is blue and our agent
-									is red, stuff on the right side are diagnostics eg. the green bars are the card
-									probability to be played and the red overlay is the position net logits (blue square
-									= max logits, yellow square = sampled position)</li>
+								<li style="list-style-type:circle">The scripted player is blue and the trained agent is
+									red. The right panel shows diagnostics: green bars are card probabilities, the red
+									overlay shows position logits, the blue square marks the maximum logit, and the
+									yellow square marks the sampled position.</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="ltr">
@@ -12321,8 +12418,11 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 				</ul>
 			</div>
 			<div style="display:contents" dir="auto">
+				<h3>Random-opponent scaling: runs 14 to 23</h3>
+			</div>
+			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-8041-aaf0-d38e4fdaf185" class="bulleted-list">
-					<li style="list-style-type:disc">run 14: opponent plays randomly<div style="display:contents"
+					<li style="list-style-type:disc">Run 14: trained against a random opponent.<div style="display:contents"
 							dir="ltr">
 							<figure id="386aa1bf-7b79-8054-aad8-c84bc033fe51" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/CleanShot_2026-06-21_at_08.09.442x.png"><img
@@ -12332,7 +12432,7 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8097-8dcc-dd4711a72e0c" class="bulleted-list">
-								<li style="list-style-type:circle">its alright but score never climbs 0.6</li>
+								<li style="list-style-type:circle">Training was stable, but score never exceeded 0.6.</li>
 							</ul>
 						</div>
 					</li>
@@ -12340,7 +12440,8 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-80b4-8a3c-f21ed4340ec7" class="bulleted-list">
-					<li style="list-style-type:disc">run 16: masks skip and deck positions if elixirs aren’t available
+					<li style="list-style-type:disc">Run 16: masked unaffordable cards and forced skip when no card was
+						affordable.
 						<div style="display:contents" dir="ltr">
 							<figure id="386aa1bf-7b79-8033-9812-cb08c1b81c15" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/image%203.png"><img style="width:3286px"
@@ -12348,8 +12449,8 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-806d-9256-f7ac4a93df3e" class="bulleted-list">
-								<li style="list-style-type:circle">massive improvement! crossing 80% win rate is crazy
-								</li>
+								<li style="list-style-type:circle">Produced a major improvement, exceeding an 80% training
+									win rate.</li>
 							</ul>
 						</div>
 					</li>
@@ -12357,10 +12458,10 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-8070-abcd-d12a007daad8" class="bulleted-list">
-					<li style="list-style-type:disc">run 17: run 16 + approx kl divergence based early stopping <div
+					<li style="list-style-type:disc">Run 17: run 16 with approximate KL early stopping.<div
 							style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8051-a400-fc7ad5281068" class="bulleted-list">
-								<li style="list-style-type:circle">failed, ie. worse than run 16 results</li>
+								<li style="list-style-type:circle">Performed worse than run 16.</li>
 							</ul>
 						</div>
 					</li>
@@ -12368,10 +12469,11 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-8042-9b3c-c7ea89d2210f" class="bulleted-list">
-					<li style="list-style-type:disc">run 18: moving mean, std for minibatch advantage normalisation<div
+					<li style="list-style-type:disc">Run 18: replaced per-minibatch advantage normalization with running
+						mean and standard deviation.<div
 							style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8063-91a7-ebacc84ced5e" class="bulleted-list">
-								<li style="list-style-type:circle">failed</li>
+								<li style="list-style-type:circle">Performance collapsed.</li>
 							</ul>
 						</div>
 					</li>
@@ -12379,11 +12481,11 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-80fb-8c68-c51542e447e9" class="bulleted-list">
-					<li style="list-style-type:disc">run 19: run 16 + step penalty = 0.001<div style="display:contents"
+					<li style="list-style-type:disc">Run 19: run 16 with a <code>0.001</code> step penalty.<div style="display:contents"
 							dir="auto">
 							<ul id="386aa1bf-7b79-80f3-b81c-e74dc8d36789" class="bulleted-list">
-								<li style="list-style-type:circle">termination/truncation ratio didnt change much ⇒
-									failed</li>
+								<li style="list-style-type:circle">The termination-to-truncation ratio barely changed,
+									so the penalty was not retained.</li>
 							</ul>
 						</div>
 					</li>
@@ -12391,12 +12493,13 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-80b4-af8f-eb89ef110eae" class="bulleted-list">
-					<li style="list-style-type:disc">run 20: run 16 + 100 games in buffer + drop forced skips (~7000
-						samples left in buffer, just like run 16&#x27;s buffer size) <div style="display:contents"
+					<li style="list-style-type:disc">Run 20: run 16 with 100 games per rollout and forced-skip
+						transitions removed, leaving roughly 7,000 samples, similar to run 16.<div style="display:contents"
 							dir="auto">
 							<ul id="386aa1bf-7b79-80cd-a532-fc7089ee5919" class="bulleted-list">
-								<li style="list-style-type:circle">failed: very poor performance coz playing so many
-									games early on is useless, so much rollout collection for no good. </li>
+								<li style="list-style-type:circle">Performed poorly. The larger early rollouts were
+									expensive, but this run bundled rollout size with forced-skip removal, so the cause
+									was not isolated.</li>
 							</ul>
 						</div>
 					</li>
@@ -12404,10 +12507,10 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-80cb-be91-e79236cb8187" class="bulleted-list">
-					<li style="list-style-type:disc">run 21: run 17 but max epochs = 120<div style="display:contents"
+					<li style="list-style-type:disc">Run 21: run 17 with the maximum PPO epochs raised to 120.<div style="display:contents"
 							dir="auto">
 							<ul id="386aa1bf-7b79-8096-9732-edffae2662f1" class="bulleted-list">
-								<li style="list-style-type:circle">failed</li>
+								<li style="list-style-type:circle">Performed poorly.</li>
 							</ul>
 						</div>
 					</li>
@@ -12415,18 +12518,21 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-808c-8b63-ed87127d89a7" class="bulleted-list">
-					<li style="list-style-type:disc">run 22: run 16 @ 256 batch size<div style="display:contents"
+					<li style="list-style-type:disc">Run 22: run 16 with minibatch size reduced to 256.<div style="display:contents"
 							dir="auto">
 							<ul id="386aa1bf-7b79-8071-9fed-d27db94b5599" class="bulleted-list">
-								<li style="list-style-type:circle">success</li>
+								<li style="list-style-type:circle">Improved over the run-16 family.</li>
 							</ul>
 						</div>
 					</li>
 				</ul>
 			</div>
 			<div style="display:contents" dir="auto">
+				<h3>Self-play and the eight-card environment: runs 24 to 31</h3>
+			</div>
+			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-8012-9d4f-d08316fd3ada" class="bulleted-list">
-					<li style="list-style-type:disc">run 24: run 22 but real training mode<div style="display:contents"
+					<li style="list-style-type:disc">Run 24: moved run 22 into full self-play training.<div style="display:contents"
 							dir="ltr">
 							<figure id="386aa1bf-7b79-8081-9822-e6c4743e02b0" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/image%204.png"><img
@@ -12434,13 +12540,14 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8005-95ec-eb5f06871e69" class="bulleted-list">
-								<li style="list-style-type:circle">hilarious quadratic growth in elo rating!</li>
+								<li style="list-style-type:circle">The near-quadratic Elo growth was a checkpoint-rating
+									bookkeeping bug, not rapid policy improvement.</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8082-8899-e46e75e03266" class="bulleted-list">
-								<li style="list-style-type:circle">fix: update the elo rating of the checkpoints instead
-									of keeping them fixed ever after saving </li>
+								<li style="list-style-type:circle">Fix: update checkpoint Elo ratings instead of freezing
+									them when saved.</li>
 							</ul>
 						</div>
 					</li>
@@ -12448,7 +12555,8 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-8012-b033-fe351e8b2cc8" class="bulleted-list">
-					<li style="list-style-type:disc">run 25: 8 cards, same config as before (vs-random)<div
+					<li style="list-style-type:disc">Run 25: expanded to eight cards using the previous
+						<code>vs-random</code> configuration.<div
 							style="display:contents" dir="ltr">
 							<figure id="386aa1bf-7b79-80cf-b1fa-f29ecb602e77" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/image%205.png"><img style="width:3366px"
@@ -12456,7 +12564,7 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8020-b4ef-d69039518a08" class="bulleted-list">
-								<li style="list-style-type:circle">not good coz elo is oscillating</li>
+								<li style="list-style-type:circle">Elo oscillated, indicating unstable progress.</li>
 							</ul>
 						</div>
 					</li>
@@ -12464,21 +12572,23 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-80a4-9014-da2c8129c206" class="bulleted-list">
-					<li style="list-style-type:disc">run 26: latest deep sets model without attention, pointer decoder
-						and other base config<div style="display:contents" dir="ltr">
+					<li style="list-style-type:disc">Run 26: changed the architecture bundle to Deep Sets with Tanh,
+						LayerNorm, orthogonal initialization, disjoint actor and critic encoders, a CNN position
+						decoder, and card information appended to the position head. Entity attention and the pointer
+						decoder were disabled.<div style="display:contents" dir="ltr">
 							<figure id="386aa1bf-7b79-802f-a16f-ddcf7d6e3ff5" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/image%206.png"><img style="width:3296px"
 										src="PPO%20Self-Play%20on%20Clash%20Royale/image%206.png" /></a></figure>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80cf-b3da-c9596a2cb3c5" class="bulleted-list">
-								<li style="list-style-type:circle">all stats seem great! </li>
+								<li style="list-style-type:circle">All recorded training statistics improved.</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8060-ba0a-f1c61032cd5e" class="bulleted-list">
-								<li style="list-style-type:circle">conclusion: vs-random is solved for 8 card
-									environment</li>
+								<li style="list-style-type:circle">This configuration reached strong performance against
+									the random opponent in the eight-card environment.</li>
 							</ul>
 						</div>
 					</li>
@@ -12489,11 +12599,11 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 				</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="386aa1bf-7b79-80f5-ba30-d250552a12a0" class="">8 card full training</p>
+				<p id="386aa1bf-7b79-80f5-ba30-d250552a12a0" class=""><strong>Eight-card full training</strong></p>
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-80d2-a832-f9548b43dca8" class="bulleted-list">
-					<li style="list-style-type:disc">run 27: run 26 but full training<div style="display:contents"
+					<li style="list-style-type:disc">Run 27: moved run 26 into full self-play training.<div style="display:contents"
 							dir="ltr">
 							<figure id="386aa1bf-7b79-8048-a177-dab33ef290de" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/image%207.png"><img style="width:2804px"
@@ -12501,17 +12611,17 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80f4-8b3c-cfc3c5563658" class="bulleted-list">
-								<li style="list-style-type:circle">elo increases steadily and plateaus</li>
+								<li style="list-style-type:circle">Elo increased steadily before plateauing.</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-806c-accc-e286da30bb8a" class="bulleted-list">
-								<li style="list-style-type:circle">⇒ this is the new baseline</li>
+								<li style="list-style-type:circle">Adopted as the new baseline.</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80f9-a684-c0c2975c1c68" class="bulleted-list">
-								<li style="list-style-type:circle">gameplay after 6.2M steps<div
+								<li style="list-style-type:circle">Gameplay after 6.2 million steps:<div
 										style="display:contents" dir="ltr">
 										<figure id="386aa1bf-7b79-80c7-b494-f80ce3a5177d">
 											<div class="source"><a
@@ -12527,14 +12637,15 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-8097-82fb-deb6e383f50d" class="bulleted-list">
-					<li style="list-style-type:disc">run 28: pointer decoder<div style="display:contents" dir="ltr">
+					<li style="list-style-type:disc">Run 28: added the pointer decoder.<div style="display:contents" dir="ltr">
 							<figure id="386aa1bf-7b79-808a-bdce-e2724f10a3e2" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/image%208.png"><img style="width:2804px"
 										src="PPO%20Self-Play%20on%20Clash%20Royale/image%208.png" /></a></figure>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80d8-bf31-f8eb5bebff9e" class="bulleted-list">
-								<li style="list-style-type:circle">no idea why but it seems to be worse than run 27</li>
+								<li style="list-style-type:circle">Appeared worse than run 27, but this was not a
+									controlled, multi-seed comparison.</li>
 							</ul>
 						</div>
 					</li>
@@ -12542,20 +12653,20 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-806f-a831-df97cdbff596" class="bulleted-list">
-					<li style="list-style-type:disc">run 30: attention model<div style="display:contents" dir="ltr">
+					<li style="list-style-type:disc">Run 30: added entity attention.<div style="display:contents" dir="ltr">
 							<figure id="386aa1bf-7b79-80e4-a633-fac46e66e86b" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/image%209.png"><img style="width:2804px"
 										src="PPO%20Self-Play%20on%20Clash%20Royale/image%209.png" /></a></figure>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8074-b952-c81db161a845" class="bulleted-list">
-								<li style="list-style-type:circle">seems to be better than run 27 but can’t tell unless
-									they are fought head-on!</li>
+								<li style="list-style-type:circle">Curves appeared stronger than run 27, but no shared
+									frozen head-to-head evaluation was run.</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80fd-a7f8-cac1a7055ff8" class="bulleted-list">
-								<li style="list-style-type:circle">gameplay at 10M steps<div style="display:contents"
+								<li style="list-style-type:circle">Gameplay at 10 million steps:<div style="display:contents"
 										dir="ltr">
 										<figure id="386aa1bf-7b79-8031-bcf8-ea89095544f6">
 											<div class="source"><a
@@ -12571,7 +12682,7 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="386aa1bf-7b79-80e3-812e-e9d67b54c853" class="bulleted-list">
-					<li style="list-style-type:disc">run 31: transformer model<div style="display:contents" dir="ltr">
+					<li style="list-style-type:disc">Run 31: replaced Deep Sets with the Transformer model.<div style="display:contents" dir="ltr">
 							<figure id="386aa1bf-7b79-80fc-880d-fb248a2be48a" class="image"><a
 									href="PPO%20Self-Play%20on%20Clash%20Royale/image%2010.png"><img
 										style="width:3364px"
@@ -12579,12 +12690,12 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-8046-9a51-d1f2477c4dcd" class="bulleted-list">
-								<li style="list-style-type:circle">numbers seem alright, right? wait for it…</li>
+								<li style="list-style-type:circle">The aggregate training metrics appeared reasonable.</li>
 							</ul>
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80f9-bdf9-fbd65b06582b" class="bulleted-list">
-								<li style="list-style-type:circle">gameplay at 10M steps<div style="display:contents"
+								<li style="list-style-type:circle">Gameplay at 10 million steps:<div style="display:contents"
 										dir="ltr">
 										<figure id="386aa1bf-7b79-8086-833c-d2b5209de59a">
 											<div class="source"><a
@@ -12597,14 +12708,15 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 						</div>
 						<div style="display:contents" dir="auto">
 							<ul id="386aa1bf-7b79-80a1-bd72-c657cafbab57" class="bulleted-list">
-								<li style="list-style-type:circle">gameplay wise it is WAY WORSE than deepsets. the
-									latter&#x27;s gameplays are so damn engagning and interesting... the former chose a
-									balanced strategy to screw each other equally and let luck decide who wins, lol.<div
+								<li style="list-style-type:circle">The recorded Transformer gameplay was more passive
+									than Deep Sets: both sides settled into a balanced strategy and left more of the
+									outcome to chance. This observation does not establish lower playing strength
+									without a shared frozen evaluation.<div
 										style="display:contents" dir="auto">
 										<ul id="386aa1bf-7b79-802d-bb0a-ec0f88724cd0" class="bulleted-list">
-											<li style="list-style-type:square">but im worries the deepsets is taking
-												random choises which we know is a compelling baseline while transformer
-												did eventually settle into an equilibrium</li>
+											<li style="list-style-type:square">Deep Sets may also have benefited from
+												more random action selection, while the Transformer appeared to settle
+												into a stable equilibrium.</li>
 										</ul>
 									</div>
 								</li>
@@ -12626,250 +12738,7 @@ c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
 				</p>
 			</div>
 		</div>
-	</article><span class="sans" style="font-size:14px;padding-top:2em">
-		<hr />
-		<details open="" style="padding-top:1em">
-			<summary style="font-weight:600;font-size:1.25em;line-height:1.3;margin:0">Inline comments</summary>
-			<div class="indented">
-				<div>
-					<p style="padding:0.2em"><b>Block text</b>: <mark class="highlight-yellow_background">(Optional)
-							<strong>Step penalty</strong>: each step during the game, inflicting a small negative reward
-							is generally done to encourage ending the game sooner. But empirically it didn’t seem to
-							help with that for this game.</mark></p>
-					<ul class="toggle">
-						<li>
-							<div><span class="user" style="padding:0.2em"><img
-										src="https://lh3.googleusercontent.com/a/AItbvmnRAkiD3uGp_mi2_ajhFNzbxlfXakD-wdub4PyV=s100"
-										class="icon user-icon" /><span><b>Tanmay Gejapati</b> <time
-											style="font-size:0.8em">May 31, 2026, 1:23 PM</time></span></span></div>
-							<div style="padding:0.2em">Ablate</div>
-							<div style="padding:0.3em"></div>
-						</li>
-					</ul>
-				</div>
-				<hr />
-			</div>
-			<div class="indented">
-				<div>
-					<p style="padding:0.2em"><b>Block text</b>: <mark class="highlight-yellow_background">The
-							configuration that worked well is as follows:</mark></p>
-					<ul class="toggle">
-						<li>
-							<div><span class="user" style="padding:0.2em"><img
-										src="https://lh3.googleusercontent.com/a/AItbvmnRAkiD3uGp_mi2_ajhFNzbxlfXakD-wdub4PyV=s100"
-										class="icon user-icon" /><span><b>Tanmay Gejapati</b> <time
-											style="font-size:0.8em">May 31, 2026, 2:49 PM</time></span></span></div>
-							<div style="padding:0.2em">Drop tower destruction bonus for king tower and increase its
-								weight to be greater than 1.8</div>
-							<div style="padding:0.3em"></div>
-						</li>
-					</ul>
-				</div>
-				<hr />
-			</div>
-			<div class="indented">
-				<div>
-					<p style="padding:0.2em"><b>Block text</b>: <mark class="highlight-yellow_background">Deep Sets
-							Network</mark></p>
-					<ul class="toggle">
-						<li>
-							<div><span class="user" style="padding:0.2em"><img
-										src="https://lh3.googleusercontent.com/a/AItbvmnRAkiD3uGp_mi2_ajhFNzbxlfXakD-wdub4PyV=s100"
-										class="icon user-icon" /><span><b>Tanmay Gejapati</b> <time
-											style="font-size:0.8em">Jun 20, 2026, 3:50 PM</time></span></span></div>
-							<div style="padding:0.2em">regenerate the images, just tweak it so that content doesnt
-								uglily leak into next line</div>
-							<div style="padding:0.3em"></div>
-						</li>
-					</ul>
-				</div>
-				<hr />
-			</div>
-			<div class="indented">
-				<div>
-					<p style="padding:0.2em"><b>Block text</b>: <mark class="highlight-yellow_background">- inputs<br />
-							- my_cards<br /> - opponent cards<br /> - my_crown_towers<br /> -
-							opponent_crown_towers<br /> - my_hand<br /> - my_next_card<br />- inputs (B, N, 25) →
-							[entity encoder] → entity embeddings (B, N, 32) → [self attention] → attended entity
-							embeddings<br />- attended entity embeddings (B, N, 32) → trunk input (B, 418):<br /> -
-							game_completion_fraction (B, 1)<br /> - my_elixir (B, 1)<br /> - sum(my_cards_embeddings)
-							(B, 32)<br /> - sum(opponent_card_embeddings) (B, 32)<br /> -
-							my_crown_tower_embeddings.flatten() (B, 32 * 3)<br /> -
-							opponent_crown_tower_embeddings.flatten() (B, 32 * 3)<br /> - hand_embeddings.flatten() (B,
-							32 * 4)<br /> - next_card_embeddings.flatten() (B, 32)<br />- trunk input → [trunk network]
-							→ head_inputs<br />- the above base network is independent for actor and critic, hence we
-							now have actor_head_inputs and critic_head_inputs<br />- critic_head_inputs → value<br />-
-							actor_head_inputs<br /> → [skip net] → skip logits<br /> → [deck net] → deck logits<br /> →
-							[position net] → position logits<br />- pointer net variant:<br /> - candidates =
-							[leant_skip_token, actor_hand_embeddings] (B, 5, 32) <br /> - query =
-							pointer_net(actor_head_inputs) (B, 1, 32)<br /> - card_logits = candidates . query (B,
-							5)<br /> → skip logits<br /> → card logits</mark></p>
-					<ul class="toggle">
-						<li>
-							<div><span class="user" style="padding:0.2em"><img
-										src="https://lh3.googleusercontent.com/a/AItbvmnRAkiD3uGp_mi2_ajhFNzbxlfXakD-wdub4PyV=s100"
-										class="icon user-icon" /><span><b>Tanmay Gejapati</b> <time
-											style="font-size:0.8em">Jun 20, 2026, 3:53 PM</time></span></span></div>
-							<div style="padding:0.2em">explain notable components and design choices and what that lead
-								to it</div>
-							<div style="padding:0.3em"></div>
-						</li>
-					</ul>
-				</div>
-				<hr />
-			</div>
-			<div class="indented">
-				<div>
-					<p style="padding:0.2em"><b>Block text</b>: <mark class="highlight-yellow_background">Transformer
-							Network</mark></p>
-					<ul class="toggle">
-						<li>
-							<div><span class="user" style="padding:0.2em"><img
-										src="https://lh3.googleusercontent.com/a/AItbvmnRAkiD3uGp_mi2_ajhFNzbxlfXakD-wdub4PyV=s100"
-										class="icon user-icon" /><span><b>Tanmay Gejapati</b> <time
-											style="font-size:0.8em">Jun 20, 2026, 3:50 PM</time></span></span></div>
-							<div style="padding:0.2em">regenerate the images, just tweak it so that content doesnt
-								uglily leak into next line</div>
-							<div style="padding:0.3em"></div>
-						</li>
-					</ul>
-				</div>
-				<hr />
-			</div>
-			<div class="indented">
-				<div>
-					<p style="padding:0.2em"><b>Block text</b>: <mark class="highlight-yellow_background">- inputs<br />
-							- my_cards<br /> - opponent_cards<br /> - my_crown_towers<br /> -
-							opponent_crown_towers<br /> - my_hand<br /> - my_next_card<br /> -
-							game_completion_fraction<br /> - elixirs<br />- entity inputs (B, 2N + 11, 26) -&gt; [entity
-							projection] -&gt; entity tokens (B, 2N + 11, 64)<br />- meta inputs:<br /> -
-							game_completion_fraction (B, 1)<br /> - elixirs (B, 1)<br /> - concat -&gt; [meta scale]
-							-&gt; meta embedding (B, 64)<br />- token sequence (B, 2N + 12, 64):<br /> - CLS token +
-							meta embedding<br /> - tower tokens<br /> - deployed card tokens<br /> - hand tokens<br /> -
-							next card token<br /> - segment embeddings added to mark CLS, towers, deployed cards,
-							hand/next<br /> - padding mask hides zero-padded deployed card slots<br />- token sequence
-							-&gt; [transformer encoder] -&gt; encoded tokens (B, 2N + 12, 64)<br />- encoded
-							tokens:<br /> - encoded CLS token (B, 64)<br /> - encoded hand tokens (B, 4, 64)<br />-
-							encoded CLS token -&gt; [post transformer MLP] -&gt; trunk_out (B, 128)<br />- the above
-							base network is independent for actor and critic, hence we now have:<br /> -
-							actor_trunk_out<br /> - actor_hand_out<br /> - critic_trunk_out<br />- critic_trunk_out
-							-&gt; [critic head] -&gt; value<br />- actor_trunk_out and actor_hand_out:<br /> -
-							actor_trunk_out -&gt; [position net] -&gt; position logits<br /> - candidates =
-							[learned_skip_token, actor_hand_out] (B, 5, 64)<br /> - query = pointer_net(actor_trunk_out)
-							(B, 1, 64)<br /> - card_logits = candidates . query (B, 5)<br /> - card_logits[:, 0] -&gt;
-							skip logits<br /> - card_logits[:, 1:] -&gt; deck logits<br />- simple non-pointer
-							variant:<br /> - actor_trunk_out -&gt; [linear skip net] -&gt; skip logits<br /> -
-							actor_hand_out -&gt; [linear deck net] -&gt; deck logits</mark></p>
-					<ul class="toggle">
-						<li>
-							<div><span class="user" style="padding:0.2em"><img
-										src="https://lh3.googleusercontent.com/a/AItbvmnRAkiD3uGp_mi2_ajhFNzbxlfXakD-wdub4PyV=s100"
-										class="icon user-icon" /><span><b>Tanmay Gejapati</b> <time
-											style="font-size:0.8em">Jun 20, 2026, 3:53 PM</time></span></span></div>
-							<div style="padding:0.2em">explain notable components and design choices that lead to it
-							</div>
-							<div style="padding:0.3em"></div>
-						</li>
-					</ul>
-				</div>
-				<hr />
-			</div>
-			<div class="indented">
-				<div>
-					<p style="padding:0.2em"><b>Block text</b>: <mark class="highlight-yellow_background">run 26: latest
-							deep sets model without attention, pointer decoder and other base config</mark></p>
-					<ul class="toggle">
-						<li>
-							<div><span class="user" style="padding:0.2em"><img
-										src="https://lh3.googleusercontent.com/a/AItbvmnRAkiD3uGp_mi2_ajhFNzbxlfXakD-wdub4PyV=s100"
-										class="icon user-icon" /><span><b>Tanmay Gejapati</b> <time
-											style="font-size:0.8em">Jun 21, 2026, 9:48 AM</time></span></span></div>
-							<div style="padding:0.2em">what were the exact differences though?</div>
-							<div style="padding:0.3em"></div>
-						</li>
-					</ul>
-				</div>
-				<hr />
-			</div>
-			<div class="indented">
-				<div>
-					<p style="padding:0.2em"><b>Block text</b>: <mark
-							class="highlight-yellow_background"><strong>Deviation</strong>:<strong> </strong>Didn’t keep
-							it symmetric to encourage focusing on card choice and deployment instead of towers doing the
-							work.</mark></p>
-					<ul class="toggle">
-						<li>
-							<div><span class="user" style="padding:0.2em"><img
-										src="https://lh3.googleusercontent.com/a/AItbvmnRAkiD3uGp_mi2_ajhFNzbxlfXakD-wdub4PyV=s100"
-										class="icon user-icon" /><span><b>Tanmay Gejapati</b> <time
-											style="font-size:0.8em">May 31, 2026, 12:41 PM</time></span></span></div>
-							<div style="padding:0.2em">Ablate</div>
-							<div style="padding:0.3em"></div>
-						</li>
-					</ul>
-				</div>
-				<hr />
-			</div>
-			<div class="indented">
-				<div>
-					<p style="padding:0.2em"><b>Block text</b>: <mark class="highlight-yellow_background">When a
-							princess tower dies, a partial section of the opponent arena gets unlocked. This wasn’t
-							implemented to simplify learning the deployment-position-network by letting all game states
-							being near homogeneous for it. </mark></p>
-					<ul class="toggle">
-						<li>
-							<div><span class="user" style="padding:0.2em"><img
-										src="https://lh3.googleusercontent.com/a/AItbvmnRAkiD3uGp_mi2_ajhFNzbxlfXakD-wdub4PyV=s100"
-										class="icon user-icon" /><span><b>Tanmay Gejapati</b> <time
-											style="font-size:0.8em">May 31, 2026, 12:36 PM</time></span></span></div>
-							<div style="padding:0.2em">Ablate</div>
-							<div style="padding:0.3em"></div>
-						</li>
-					</ul>
-				</div>
-				<hr />
-			</div>
-			<div class="indented">
-				<div>
-					<p style="padding:0.2em"><b>Block text</b>: <mark class="highlight-yellow_background">Spells also
-							can be deployed only on our side of the arena. This is for the same reasons as above.</mark>
-					</p>
-					<ul class="toggle">
-						<li>
-							<div><span class="user" style="padding:0.2em"><img
-										src="https://lh3.googleusercontent.com/a/AItbvmnRAkiD3uGp_mi2_ajhFNzbxlfXakD-wdub4PyV=s100"
-										class="icon user-icon" /><span><b>Tanmay Gejapati</b> <time
-											style="font-size:0.8em">May 31, 2026, 12:36 PM</time></span></span></div>
-							<div style="padding:0.2em">Ablate</div>
-							<div style="padding:0.3em"></div>
-						</li>
-					</ul>
-				</div>
-				<hr />
-			</div>
-			<div class="indented">
-				<div>
-					<p style="padding:0.2em"><b>Block text</b>: <mark class="highlight-yellow_background">This was done
-							to see how the gameplay shifts in this mode because even a well doing side would be at a
-							risk of loosing if the game made it to this stage. They may be encouraged to be more
-							aggressive in the early game or choose being very defensive in this mode while allowing the
-							loosing side another chance to redeem the game. </mark></p>
-					<ul class="toggle">
-						<li>
-							<div><span class="user" style="padding:0.2em"><img
-										src="https://lh3.googleusercontent.com/a/AItbvmnRAkiD3uGp_mi2_ajhFNzbxlfXakD-wdub4PyV=s100"
-										class="icon user-icon" /><span><b>Tanmay Gejapati</b> <time
-											style="font-size:0.8em">May 31, 2026, 12:23 PM</time></span></span></div>
-							<div style="padding:0.2em">Needs ablation and actual analysis to see how the game play
-								changed</div>
-							<div style="padding:0.3em"></div>
-						</li>
-					</ul>
-				</div>
-				<hr />
-			</div>
-		</details>
-	</span>
+	</article>
 </body>
 
 </html>
