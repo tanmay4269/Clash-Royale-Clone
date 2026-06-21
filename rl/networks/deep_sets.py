@@ -200,10 +200,10 @@ class DeepSetsActorCritic(BaseActorCritic):
         """
         
         all_entities = t.cat([
-            obs["my_crown_towers"], 
-            obs["opponent_crown_towers"], 
             obs["my_cards"], 
             obs["opponent_cards"], 
+            obs["my_crown_towers"], 
+            obs["opponent_crown_towers"], 
             obs["my_hand"],
             obs["my_next_card"].unsqueeze(1),
         ], dim=1).to(dtype=t.float32)
@@ -246,8 +246,8 @@ class DeepSetsActorCritic(BaseActorCritic):
             skip_embed = self.skip_token.unsqueeze(0).expand(B, -1).unsqueeze(1)
             candidates = t.cat([skip_embed, hand_embeddings], dim=1)  # (B, 5, E)
 
-            query = self.pointer_query(actor_heads_inputs).unsqueeze(1)        # (B, 1, E)
-            card_logits = (query * candidates).sum(dim=-1).squeeze(1) # (B, 5)
+            query = self.pointer_query(actor_heads_inputs).unsqueeze(1)  # (B, 1, E)
+            card_logits = (query * candidates).sum(dim=-1).squeeze(1)    # (B, 5)
             
             skip_logits = card_logits[:, 0]
             deck_logits = card_logits[:, 1:]

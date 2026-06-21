@@ -1,0 +1,202 @@
+\documentclass[tikz,border=8pt]{standalone}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath}
+\usetikzlibrary{arrows.meta, positioning}
+
+\definecolor{boxbg}{HTML}{F8FAFC}
+\definecolor{boxline}{HTML}{334155}
+\definecolor{stagebg}{HTML}{EFF6FF}
+\definecolor{stageborder}{HTML}{2563EB}
+\definecolor{listbg}{HTML}{F8FAFC}
+\definecolor{actorbg}{HTML}{EEF2FF}
+\definecolor{criticbg}{HTML}{ECFDF5}
+\definecolor{pointerbg}{HTML}{FFF7ED}
+\definecolor{outbg}{HTML}{FEFCE8}
+
+\tikzset{
+  box/.style={
+    draw=boxline,
+    rounded corners=5pt,
+    line width=0.8pt,
+    fill=boxbg,
+    align=left,
+    inner sep=7pt,
+    font=\sffamily\small
+  },
+  stage/.style={
+    box,
+    fill=stagebg,
+    draw=stageborder,
+    minimum height=16mm,
+    align=center,
+    font=\sffamily\bfseries\small
+  },
+  listbox/.style={
+    box,
+    fill=listbg,
+    text width=58mm
+  },
+  widebox/.style={
+    box,
+    text width=90mm
+  },
+  actorbox/.style={
+    box,
+    fill=actorbg,
+    text width=48mm
+  },
+  criticbox/.style={
+    box,
+    fill=criticbg,
+    text width=42mm
+  },
+  pointerbox/.style={
+    box,
+    fill=pointerbg,
+    text width=66mm
+  },
+  simplebox/.style={
+    box,
+    fill=boxbg,
+    text width=48mm
+  },
+  outbox/.style={
+    box,
+    fill=outbg,
+    align=center,
+    minimum width=32mm
+  },
+  arrow/.style={
+    -{Latex[length=2.5mm]},
+    line width=0.8pt,
+    draw=boxline
+  },
+  softarrow/.style={
+    -{Latex[length=2.2mm]},
+    line width=0.7pt,
+    draw=boxline
+  }
+}
+
+\begin{document}
+\begin{tikzpicture}[node distance=11mm and 12mm]
+
+\node[listbox] (inputs) {
+  \textbf{inputs}\\[2pt]
+  $\bullet$ \texttt{my\_cards}\\
+  $\bullet$ \texttt{opponent\_cards}\\
+  $\bullet$ \texttt{my\_crown\_towers}\\
+  $\bullet$ \texttt{opponent\_crown\_towers}\\
+  $\bullet$ \texttt{my\_hand}\\
+  $\bullet$ \texttt{my\_next\_card}\\
+  $\bullet$ \texttt{game\_completion\_fraction}\\
+  $\bullet$ \texttt{elixirs}
+};
+
+\node[stage, right=of inputs, text width=38mm] (entityproj) {
+  entity projection\\
+  \normalfont $(B,2N+11,26)\to(B,2N+11,64)$
+};
+
+\node[widebox, right=of entityproj] (tokens) {
+  \textbf{token sequence} $(B,2N+12,64)$\\[2pt]
+  $\bullet$ CLS token plus meta scale(game fraction, elixirs)\\
+  $\bullet$ projected tower, deployed card, hand, next-card tokens\\
+  $\bullet$ segment embeddings mark CLS, towers, deployed cards, hand/next\\
+  $\bullet$ padding mask hides zero-padded deployed card slots
+};
+
+\node[stage, right=of tokens, text width=42mm] (transformer) {
+  transformer encoder\\
+  \normalfont bidirectional attention
+};
+
+\node[widebox, below=18mm of transformer] (encoded) {
+  \textbf{encoded outputs}\\[2pt]
+  $\bullet$ encoded CLS token $(B,64)$\\
+  $\bullet$ encoded hand tokens $(B,4,64)$
+};
+
+\node[stage, below=11mm of encoded, text width=44mm] (post) {
+  post transformer MLP\\
+  \normalfont CLS $(B,64)\to$ trunk output $(B,128)$
+};
+
+\node[box, below=10mm of post, text width=75mm, align=center] (split) {
+  encoder plus post-transformer is independent for actor and critic\\
+  gives \texttt{actor\_trunk\_out}, \texttt{actor\_hand\_out}, and \texttt{critic\_trunk\_out}
+};
+
+\node[criticbox, below left=15mm and 26mm of split] (critic) {
+  \textbf{critic path}\\[2pt]
+  \texttt{critic\_trunk\_out}
+};
+
+\node[outbox, below=8mm of critic] (value) {
+  value
+};
+
+\node[actorbox, below right=15mm and 26mm of split] (actor) {
+  \textbf{actor path}\\[2pt]
+  \texttt{actor\_trunk\_out}\\
+  \texttt{actor\_hand\_out}
+};
+
+\node[pointerbox, below=10mm of actor] (query) {
+  \textbf{pointer query}\\[2pt]
+  query $=$ pointer net(actor trunk out)\\
+  $(B,1,64)$
+};
+
+\node[pointerbox, left=12mm of query] (candidates) {
+  \textbf{pointer candidates}\\[2pt]
+  candidates $=$ [learned skip token, actor hand out]\\
+  $(B,5,64)$
+};
+
+\node[pointerbox, below=10mm of query] (dot) {
+  \textbf{card score dot product}\\[2pt]
+  card logits $=$ candidates $\cdot$ query\\
+  $(B,5)$
+};
+
+\node[outbox, below left=9mm and 11mm of dot] (skip) {
+  skip logits
+};
+
+\node[outbox, below right=9mm and 11mm of dot] (deck) {
+  deck logits
+};
+
+\node[outbox, right=14mm of query] (pos) {
+  position logits
+};
+
+\node[simplebox, right=14mm of pos] (simple) {
+  \textbf{simple variant}\\[2pt]
+  no pointer decoder\\
+  skip logits $=$ linear(actor trunk out)\\
+  deck logits $=$ linear(actor hand out)
+};
+
+\draw[arrow] (inputs) -- (entityproj);
+\draw[arrow] (entityproj) -- (tokens);
+\draw[arrow] (tokens) -- (transformer);
+\draw[arrow] (transformer) -- (encoded);
+\draw[arrow] (encoded) -- (post);
+\draw[arrow] (post) -- (split);
+\draw[arrow] (split) -- (critic);
+\draw[arrow] (critic) -- (value);
+\draw[arrow] (split) -- (actor);
+\draw[arrow] (actor) -- (query);
+\draw[softarrow] (actor) -- node[above, font=\sffamily\tiny] {hand tokens} (candidates);
+\draw[arrow] (query) -- (dot);
+\draw[arrow] (candidates) -- (dot);
+\draw[arrow] (dot) -- (skip);
+\draw[arrow] (dot) -- (deck);
+\draw[softarrow] (actor) -- node[above, font=\sffamily\tiny] {position net} (pos);
+\draw[softarrow] (actor) -- (simple);
+
+\end{tikzpicture}
+\end{document}
