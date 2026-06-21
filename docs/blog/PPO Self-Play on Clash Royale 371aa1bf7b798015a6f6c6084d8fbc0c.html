@@ -2635,126 +2635,98 @@ Fallback variants
 			<div style="display:contents" dir="auto">
 				<h3 id="371aa1bf-7b79-8022-ad16-fc7a285ce11a" class="">Transformer Network</h3>
 			</div>
+			<div style="display:contents" dir="auto">
+				<p>The Transformer replaces Deep Sets pooling with a learned sequence representation. Every tower,
+					deployed entity, hand card and next card becomes a token, allowing repeated attention blocks to
+					model interactions before producing a global state representation.</p>
+			</div>
 			<div style="display:contents" dir="ltr">
 				<figure id="382aa1bf-7b79-801b-9d78-dde84fc364b2" class="image"><a
 						href="PPO%20Self-Play%20on%20Clash%20Royale/image%202.png"><img style="width:704px"
 							src="PPO%20Self-Play%20on%20Clash%20Royale/image%202.png" /></a></figure>
 			</div>
 			<div style="display:contents" dir="auto">
-				<pre id="382aa1bf-7b79-80e4-b941-c6b53e97cd29" class="code code-wrap"><code class="language-markdown" style="white-space:pre-wrap;word-break:break-all">- inputs
-	- my_cards
-	- opponent_cards
-	- my_crown_towers
-	- opponent_crown_towers
-	- my_hand
-	- my_next_card
-	- game_completion_fraction
-	- elixirs
-- entity inputs (B, 2N + 11, 26) -&gt; [entity projection] -&gt; entity tokens (B, 2N + 11, 64)
-- meta inputs:
-	- game_completion_fraction (B, 1)
-	- elixirs (B, 1)
-	- concat -&gt; [meta scale] -&gt; meta embedding (B, 64)
-- token sequence (B, 2N + 12, 64):
-	- CLS token + meta embedding
-	- tower tokens
-	- deployed card tokens
-	- hand tokens
-	- next card token
-	- segment embeddings added to mark CLS, towers, deployed cards, hand/next
-	- padding mask hides zero-padded deployed card slots
-- token sequence -&gt; [transformer encoder] -&gt; encoded tokens (B, 2N + 12, 64)
-- encoded tokens:
-	- encoded CLS token (B, 64)
-	- encoded hand tokens (B, 4, 64)
-- encoded CLS token -&gt; [post transformer MLP] -&gt; trunk_out (B, 128)
-- the above base network is independent for actor and critic, hence we now have:
-	- actor_trunk_out
-	- actor_hand_out
-	- critic_trunk_out
-- critic_trunk_out -&gt; [critic head] -&gt; value
-- actor_trunk_out and actor_hand_out:
-	- actor_trunk_out -&gt; [position net] -&gt; position logits
-	- candidates = [learned_skip_token, actor_hand_out] (B, 5, 64)
-	- query = pointer_net(actor_trunk_out) (B, 1, 64)
-	- card_logits = candidates . query (B, 5)
-	- card_logits[:, 0] -&gt; skip logits
-	- card_logits[:, 1:] -&gt; deck logits
-- simple non-pointer variant:
-	- actor_trunk_out -&gt; [linear skip net] -&gt; skip logits
-	- actor_hand_out -&gt; [linear deck net] -&gt; deck logits</code></pre>
+				<pre id="382aa1bf-7b79-80e4-b941-c6b53e97cd29" class="code code-wrap"><code class="language-text" style="white-space:pre;word-break:normal">Entity features
+	├── six towers: 				(B, 6, 26)
+	├── my deployed entities: 		(B, 32, 26)
+	├── opponent deployed entities: (B, 32, 26)
+	├── hand: 						(B, 4, 26)
+	└── next card: 					(B, 1, 26)
+	→ linear entity projection:     26 → 64
+	→ entity tokens: 				(B, 75, 64)
+
+Meta features
+	├── game completion fraction: (B, 1)
+	└── elixir: 				  (B, 1)
+	→ concatenate: 				  (B, 2)
+	→ linear projection and Tanh: (B, 64)
+	→ add to learned CLS token
+
+Token sequence: (B, 76, 64)
+	├── meta-enriched CLS token
+	├── six tower tokens
+	├── 64 deployed-entity tokens
+	├── four hand tokens
+	└── one next-card token
+	→ add segment embeddings
+		├── CLS
+		├── towers
+		├── deployed entities
+		└── hand and next card
+	→ mask zero-padded deployed-entity tokens
+	→ two pre-LayerNorm Transformer encoder blocks
+		├── 4-head bidirectional self-attention
+		├── feed-forward width: 4 × 64 = 256
+		└── zero dropout
+	→ contextual token sequence: (B, 76, 64)
+
+Outputs
+	├── CLS token: 					 (B, 64)
+	│	→ post-Transformer MLP:      64 → 128 → 128
+	│	→ global trunk output:       (B, 128)
+	└── four contextual hand tokens: (B, 4, 64)</code></pre>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-80fe-ad62-d80ad7c9b0fd" class="bulleted-list">
-					<li style="list-style-type:disc">Notable design choices:<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-80bb-9e72-ebf5547b44fa" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked"><code>encoder.meta_scale</code>: Meta (elixirs
-										+ game_completion_fraction) is added directly to the CLS token instead of
-										wasting a full sequence position on 2 scalars.</span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-80e6-be81-ddf5c23d715c" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked"><code>encoder.entity_proj</code></span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-8079-9f64-cc7d7c670cf3" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked"><code>encoder.cls_token</code> and
-										<code>tokens</code></span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-8079-82de-d89ac485a4cc" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked"><code>encoder.segment_embedding</code> </span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-80ea-ae4e-d5f34485e82a" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked">padding and
-										<code>TransformerEncoder</code></span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-80d9-a70e-c6851ae513f0" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked"><code>post_transformer</code></span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-						<div style="display:contents" dir="auto">
-							<ul id="386aa1bf-7b79-803b-9876-e6ddeb014bc5" class="to-do-list">
-								<li>
-									<div class="checkbox checkbox-off"></div> <span
-										class="to-do-children-unchecked">rest all is similar to DeepSets network</span>
-									<div class="indented"></div>
-								</li>
-							</ul>
-						</div>
-					</li>
-				</ul>
+				<h4>Token construction</h4>
+				<p>Each 26-feature entity is projected directly to a 64-dimensional token. Unlike Deep Sets, the
+					Transformer does not average deployed entities into one vector before reasoning about them. Each
+					entity remains available as an individual token throughout the encoder.</p>
+				<p>The sequence contains 76 positions: one CLS token, six towers, 64 padded deployed-entity slots, four
+					hand cards and one next card. Zero-padded deployed slots are hidden with a key-padding mask.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Meta-enriched CLS token</h4>
+				<p>Game completion and elixir are projected together from two scalars to 64 features, then added to a
+					learned CLS token. This gives the global token immediate access to match phase and available
+					resources without allocating another sequence position.</p>
+				<p>After the Transformer, the encoded CLS token acts as the global state summary. A two-layer MLP maps
+					it from 64 to 128 dimensions before the actor or critic head consumes it.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Segment embeddings</h4>
+				<p>The same entity projection is used for every card and tower, so learned segment embeddings identify
+					the role of each token. Four segment types distinguish CLS, towers, deployed entities, and hand plus
+					next-card tokens. Individual entity features still encode properties such as ownership, position
+					and card type.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Transformer encoder</h4>
+				<p>The default encoder contains two full Transformer blocks with four attention heads and a
+					256-dimensional feed-forward sublayer. Attention is bidirectional: every unmasked token can use
+					information from every other unmasked token.</p>
+				<p>The blocks use pre-LayerNorm and zero dropout. Pre-LayerNorm improves gradient flow through stacked
+					blocks, while dropout was disabled to avoid injecting noise into policy and value predictions.
+					These are stability-motivated choices rather than isolated conclusions from this project.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<h4>Contextual hand tokens</h4>
+				<p>The encoded hand tokens are retained alongside the CLS output. They have attended to the complete
+					game state, so the pointer decoder compares the global actor query against card representations
+					already conditioned on towers, troops, elixir and match phase.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p>The remaining actor-critic split, pointer card decoder, card-conditioned CNN position decoder,
+					action masking, learned temperatures and initialization are the same as in the Deep Sets network.</p>
 			</div>
 			<div style="display:contents" dir="auto">
 				<h2 id="382aa1bf-7b79-8084-9fe0-d2e6c7a84967" class="">Training Algorithm</h2>

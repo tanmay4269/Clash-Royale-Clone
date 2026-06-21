@@ -1,202 +1,144 @@
-\documentclass[tikz,border=8pt]{standalone}
+\documentclass[tikz,border=10pt]{standalone}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
-\usepackage{amsmath}
 \usetikzlibrary{arrows.meta, positioning}
 
-\definecolor{boxbg}{HTML}{F8FAFC}
-\definecolor{boxline}{HTML}{334155}
-\definecolor{stagebg}{HTML}{EFF6FF}
-\definecolor{stageborder}{HTML}{2563EB}
-\definecolor{listbg}{HTML}{F8FAFC}
+\definecolor{ink}{HTML}{334155}
+\definecolor{inputbg}{HTML}{F8FAFC}
+\definecolor{sharedbg}{HTML}{EFF6FF}
 \definecolor{actorbg}{HTML}{EEF2FF}
 \definecolor{criticbg}{HTML}{ECFDF5}
-\definecolor{pointerbg}{HTML}{FFF7ED}
-\definecolor{outbg}{HTML}{FEFCE8}
+\definecolor{tokenbg}{HTML}{FFF7ED}
+\definecolor{outputbg}{HTML}{FEFCE8}
 
 \tikzset{
   box/.style={
-    draw=boxline,
+    draw=ink,
     rounded corners=5pt,
     line width=0.8pt,
-    fill=boxbg,
     align=left,
     inner sep=7pt,
     font=\sffamily\small
   },
-  stage/.style={
-    box,
-    fill=stagebg,
-    draw=stageborder,
-    minimum height=16mm,
-    align=center,
-    font=\sffamily\bfseries\small
-  },
-  listbox/.style={
-    box,
-    fill=listbg,
-    text width=58mm
-  },
-  widebox/.style={
-    box,
-    text width=90mm
-  },
-  actorbox/.style={
-    box,
-    fill=actorbg,
-    text width=48mm
-  },
-  criticbox/.style={
-    box,
-    fill=criticbg,
-    text width=42mm
-  },
-  pointerbox/.style={
-    box,
-    fill=pointerbg,
-    text width=66mm
-  },
-  simplebox/.style={
-    box,
-    fill=boxbg,
-    text width=48mm
-  },
-  outbox/.style={
-    box,
-    fill=outbg,
-    align=center,
-    minimum width=32mm
-  },
-  arrow/.style={
-    -{Latex[length=2.5mm]},
-    line width=0.8pt,
-    draw=boxline
-  },
-  softarrow/.style={
-    -{Latex[length=2.2mm]},
-    line width=0.7pt,
-    draw=boxline
-  }
+  input/.style={box, fill=inputbg, align=center, text width=55mm},
+  process/.style={box, fill=sharedbg, align=center, text width=48mm},
+  actor/.style={box, fill=actorbg, align=center, text width=50mm},
+  critic/.style={box, fill=criticbg, align=center, text width=50mm},
+  token/.style={box, fill=tokenbg, align=center, text width=52mm},
+  output/.style={box, fill=outputbg, align=center, minimum width=31mm},
+  note/.style={box, fill=inputbg, text width=52mm, font=\sffamily\footnotesize},
+  arrow/.style={-{Latex[length=2.5mm]}, line width=0.8pt, draw=ink}
 }
 
 \begin{document}
-\begin{tikzpicture}[node distance=11mm and 12mm]
+\begin{tikzpicture}[node distance=11mm and 16mm]
 
-\node[listbox] (inputs) {
-  \textbf{inputs}\\[2pt]
-  $\bullet$ \texttt{my\_cards}\\
-  $\bullet$ \texttt{opponent\_cards}\\
-  $\bullet$ \texttt{my\_crown\_towers}\\
-  $\bullet$ \texttt{opponent\_crown\_towers}\\
-  $\bullet$ \texttt{my\_hand}\\
-  $\bullet$ \texttt{my\_next\_card}\\
-  $\bullet$ \texttt{game\_completion\_fraction}\\
-  $\bullet$ \texttt{elixirs}
+\node[input] (entities) {
+  \textbf{entity features}\\[2pt]
+  six towers $(B,6,26)$\\
+  two deployed sets $(B,32,26)$\\
+  hand $(B,4,26)$ and next card $(B,1,26)$
 };
 
-\node[stage, right=of inputs, text width=38mm] (entityproj) {
-  entity projection\\
-  \normalfont $(B,2N+11,26)\to(B,2N+11,64)$
+\node[input, right=of entities] (meta) {
+  \textbf{meta features}\\[2pt]
+  game completion fraction $(B,1)$\\
+  elixir $(B,1)$
 };
 
-\node[widebox, right=of entityproj] (tokens) {
-  \textbf{token sequence} $(B,2N+12,64)$\\[2pt]
-  $\bullet$ CLS token plus meta scale(game fraction, elixirs)\\
-  $\bullet$ projected tower, deployed card, hand, next-card tokens\\
-  $\bullet$ segment embeddings mark CLS, towers, deployed cards, hand/next\\
-  $\bullet$ padding mask hides zero-padded deployed card slots
+\node[process, below=of entities] (projection) {
+  \textbf{entity projection}\\
+  shared linear map $26\to64$\\
+  75 entity tokens $(B,75,64)$
 };
 
-\node[stage, right=of tokens, text width=42mm] (transformer) {
-  transformer encoder\\
-  \normalfont bidirectional attention
+\node[process, below=of meta] (metaproj) {
+  \textbf{meta projection}\\
+  concatenate, Linear, Tanh\\
+  $(B,2)\to(B,64)$
 };
 
-\node[widebox, below=18mm of transformer] (encoded) {
-  \textbf{encoded outputs}\\[2pt]
-  $\bullet$ encoded CLS token $(B,64)$\\
-  $\bullet$ encoded hand tokens $(B,4,64)$
+\node[token, below right=15mm and -18mm of projection] (sequence) {
+  \textbf{token sequence $(B,76,64)$}\\
+  meta projection + learned CLS token\\
+  six towers, 64 deployed slots\\
+  four hand tokens, one next-card token
 };
 
-\node[stage, below=11mm of encoded, text width=44mm] (post) {
-  post transformer MLP\\
-  \normalfont CLS $(B,64)\to$ trunk output $(B,128)$
+\node[token, below=of sequence] (segments) {
+  \textbf{token identity and padding}\\
+  add CLS, tower, deployed, hand/next segments\\
+  mask zero-padded deployed slots
 };
 
-\node[box, below=10mm of post, text width=75mm, align=center] (split) {
-  encoder plus post-transformer is independent for actor and critic\\
-  gives \texttt{actor\_trunk\_out}, \texttt{actor\_hand\_out}, and \texttt{critic\_trunk\_out}
+\node[process, below=of segments] (split) {
+  \textbf{two independent Transformer paths}\\
+  actor and critic each receive\\
+  the complete token sequence
 };
 
-\node[criticbox, below left=15mm and 26mm of split] (critic) {
-  \textbf{critic path}\\[2pt]
-  \texttt{critic\_trunk\_out}
+\node[actor, below left=12mm and 13mm of split] (actorenc) {
+  \textbf{actor Transformer encoder}\\
+  two pre-LayerNorm blocks\\
+  4-head bidirectional attention\\
+  feed-forward width 256, zero dropout
 };
 
-\node[outbox, below=8mm of critic] (value) {
+\node[critic, below right=12mm and 13mm of split] (criticenc) {
+  \textbf{critic Transformer encoder}\\
+  two pre-LayerNorm blocks\\
+  4-head bidirectional attention\\
+  feed-forward width 256, zero dropout
+};
+
+\node[actor, below=of actorenc] (actorout) {
+  \textbf{actor outputs}\\
+  contextual CLS token $(B,64)$\\
+  contextual hand tokens $(B,4,64)$
+};
+
+\node[critic, below=of criticenc] (criticout) {
+  \textbf{critic output}\\
+  contextual CLS token $(B,64)$
+};
+
+\node[actor, below=of actorout] (actorpost) {
+  \textbf{actor post-Transformer MLP}\\
+  CLS: $64\to128\to128$\\
+  global actor state $(B,128)$
+};
+
+\node[critic, below=of criticout] (criticpost) {
+  \textbf{critic post-Transformer MLP}\\
+  CLS: $64\to128\to128$\\
+  global critic state $(B,128)$
+};
+
+\node[output, below=of criticpost] (value) {
   value
 };
 
-\node[actorbox, below right=15mm and 26mm of split] (actor) {
-  \textbf{actor path}\\[2pt]
-  \texttt{actor\_trunk\_out}\\
-  \texttt{actor\_hand\_out}
+\node[note, below=of actorpost] (sharedheads) {
+  \textbf{same downstream heads as Deep Sets}\\
+  pointer decoder uses the contextual hand tokens,\\
+  selected card conditions the CNN position decoder,\\
+  masking, temperatures and initialization are unchanged
 };
 
-\node[pointerbox, below=10mm of actor] (query) {
-  \textbf{pointer query}\\[2pt]
-  query $=$ pointer net(actor trunk out)\\
-  $(B,1,64)$
-};
-
-\node[pointerbox, left=12mm of query] (candidates) {
-  \textbf{pointer candidates}\\[2pt]
-  candidates $=$ [learned skip token, actor hand out]\\
-  $(B,5,64)$
-};
-
-\node[pointerbox, below=10mm of query] (dot) {
-  \textbf{card score dot product}\\[2pt]
-  card logits $=$ candidates $\cdot$ query\\
-  $(B,5)$
-};
-
-\node[outbox, below left=9mm and 11mm of dot] (skip) {
-  skip logits
-};
-
-\node[outbox, below right=9mm and 11mm of dot] (deck) {
-  deck logits
-};
-
-\node[outbox, right=14mm of query] (pos) {
-  position logits
-};
-
-\node[simplebox, right=14mm of pos] (simple) {
-  \textbf{simple variant}\\[2pt]
-  no pointer decoder\\
-  skip logits $=$ linear(actor trunk out)\\
-  deck logits $=$ linear(actor hand out)
-};
-
-\draw[arrow] (inputs) -- (entityproj);
-\draw[arrow] (entityproj) -- (tokens);
-\draw[arrow] (tokens) -- (transformer);
-\draw[arrow] (transformer) -- (encoded);
-\draw[arrow] (encoded) -- (post);
-\draw[arrow] (post) -- (split);
-\draw[arrow] (split) -- (critic);
-\draw[arrow] (critic) -- (value);
-\draw[arrow] (split) -- (actor);
-\draw[arrow] (actor) -- (query);
-\draw[softarrow] (actor) -- node[above, font=\sffamily\tiny] {hand tokens} (candidates);
-\draw[arrow] (query) -- (dot);
-\draw[arrow] (candidates) -- (dot);
-\draw[arrow] (dot) -- (skip);
-\draw[arrow] (dot) -- (deck);
-\draw[softarrow] (actor) -- node[above, font=\sffamily\tiny] {position net} (pos);
-\draw[softarrow] (actor) -- (simple);
+\draw[arrow] (entities) -- (projection);
+\draw[arrow] (meta) -- (metaproj);
+\draw[arrow] (projection) -- (sequence);
+\draw[arrow] (metaproj) -- (sequence);
+\draw[arrow] (sequence) -- (segments);
+\draw[arrow] (segments) -- (split);
+\draw[arrow] (split) -- (actorenc);
+\draw[arrow] (split) -- (criticenc);
+\draw[arrow] (actorenc) -- (actorout);
+\draw[arrow] (criticenc) -- (criticout);
+\draw[arrow] (actorout) -- (actorpost);
+\draw[arrow] (criticout) -- (criticpost);
+\draw[arrow] (criticpost) -- (value);
+\draw[arrow] (actorpost) -- (sharedheads);
 
 \end{tikzpicture}
 \end{document}
