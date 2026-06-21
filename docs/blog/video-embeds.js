@@ -109,6 +109,12 @@ document.addEventListener("DOMContentLoaded", () => {
 	const youtubeLinks = document.querySelectorAll(
 		'figure .source a[href*="youtube.com/watch"], figure .source a[href*="youtu.be/"]',
 	);
+	const autoplayTargets = [];
+
+	const initializeVideoSpeed = (video) => {
+		video.defaultPlaybackRate = 2;
+		video.playbackRate = 2;
+	};
 
 	for (const link of videoLinks) {
 		const frame = document.createElement("div");
@@ -118,8 +124,11 @@ document.addEventListener("DOMContentLoaded", () => {
 		video.controls = true;
 		video.preload = "metadata";
 		video.playsInline = true;
+		video.muted = true;
 		video.src = link.href;
 		video.className = "local-video";
+		initializeVideoSpeed(video);
+		video.addEventListener("loadedmetadata", () => initializeVideoSpeed(video), { once: true });
 		expand.className = "media-expand-button";
 		expand.type = "button";
 		expand.setAttribute("aria-label", "Open video");
@@ -129,11 +138,22 @@ document.addEventListener("DOMContentLoaded", () => {
 			modalVideo.controls = true;
 			modalVideo.autoplay = true;
 			modalVideo.playsInline = true;
+			modalVideo.muted = video.muted;
+			initializeVideoSpeed(modalVideo);
+			modalVideo.addEventListener("loadedmetadata", () => initializeVideoSpeed(modalVideo), { once: true });
 			openLightbox(modalVideo);
 		});
 
 		frame.append(video, expand);
 		link.parentElement.replaceWith(frame);
+		autoplayTargets.push({
+			element: frame,
+			play: () => {
+				video.currentTime = 0;
+				void video.play().catch(() => {});
+			},
+			pause: () => video.pause(),
+		});
 	}
 
 	for (const link of youtubeLinks) {
@@ -151,7 +171,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		container.className = "youtube-embed";
 
 		const iframe = document.createElement("iframe");
-		iframe.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}`;
+		iframe.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?enablejsapi=1&playsinline=1&mute=1`;
 		iframe.title = "YouTube video player";
 		iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
 		iframe.allowFullscreen = true;
@@ -163,14 +183,57 @@ document.addEventListener("DOMContentLoaded", () => {
 		expand.setAttribute("aria-label", "Open YouTube video");
 		expand.addEventListener("click", () => {
 			const modalIframe = iframe.cloneNode();
-			modalIframe.src = `${iframe.src}?autoplay=1`;
+			modalIframe.src = `${iframe.src}&autoplay=1`;
 			modalIframe.allow = iframe.allow;
 			modalIframe.allowFullscreen = true;
+			modalIframe.addEventListener("load", () => {
+				modalIframe.contentWindow?.postMessage(JSON.stringify({
+					event: "command",
+					func: "setPlaybackRate",
+					args: [2],
+				}), "*");
+			});
 			openLightbox(modalIframe);
 		});
 
 		container.append(iframe, expand);
 		link.parentElement.replaceWith(container);
+		const youtubeCommand = (func, args = []) => {
+			iframe.contentWindow?.postMessage(JSON.stringify({
+				event: "command",
+				func,
+				args,
+			}), "*");
+		};
+		iframe.addEventListener("load", () => youtubeCommand("setPlaybackRate", [2]));
+		autoplayTargets.push({
+			element: container,
+			play: () => {
+				youtubeCommand("seekTo", [0, true]);
+				youtubeCommand("setPlaybackRate", [2]);
+				youtubeCommand("playVideo");
+			},
+			pause: () => youtubeCommand("pauseVideo"),
+		});
+	}
+
+	const mediaObserver = new IntersectionObserver((entries) => {
+		for (const entry of entries) {
+			const target = autoplayTargets.find(({ element }) => element === entry.target);
+			if (!target) {
+				continue;
+			}
+
+			if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+				target.play();
+			} else {
+				target.pause();
+			}
+		}
+	}, { threshold: [0, 0.6] });
+
+	for (const { element } of autoplayTargets) {
+		mediaObserver.observe(element);
 	}
 
 	const tables = document.querySelectorAll("article table");

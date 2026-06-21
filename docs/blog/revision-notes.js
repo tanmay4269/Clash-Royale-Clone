@@ -1,66 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
 	const revisions = [
 		{
-			id: "371aa1bf-7b79-8042-99d3-c690706071eb",
-			context: "Implementation Details",
-			html: `
-				<h4>Change the section structure</h4>
-				<p>Split the current list into three explicit groups: implemented rules, intentional simplifications and known simulator defects. Several items are currently written as deliberate design choices even though the research log records them as unresolved fidelity work.</p>
-				<ul>
-					<li><strong>Implemented:</strong> eight Training Camp cards, 18 by 32 tile arena, four decisions per second, 2x elixir from 2:00, 3x elixir and sudden death from 3:00, then a 5:00 hit-point tiebreaker.</li>
-					<li><strong>Intentional simplifications:</strong> fixed card levels, reduced card pool, static deployment mask and approximate physics.</li>
-					<li><strong>Known defects:</strong> territory does not unlock after a princess tower falls, spells cannot target the opponent half, bridge and wall pathing still have edge cases, minions do not fully behave as flying units and sudden death has an unresolved correctness issue.</li>
-				</ul>
-				<h4>Ablations implied by the comments</h4>
-				<ul>
-					<li>Do not say asymmetric tower statistics encourage card play as a conclusion. Test symmetric versus asymmetric towers with identical seeds, then compare deployment rate, tower damage, game length and win rate.</li>
-					<li>Compare the custom sudden-death rule against standard tower-count resolution. Measure early-game aggression, damage before 3:00, termination rate and strategy diversity.</li>
-					<li>Compare the static own-half deployment mask against dynamic territory unlock after a tower falls. Run spell targeting as a separate factor because spells should not share troop deployment restrictions.</li>
-				</ul>
-				<h4>Resolve the playable-demo placeholder</h4>
-				<p>The repository currently has a local Pygame interface in <code>game.py</code>, not a browser implementation. Either replace the placeholder with exact local launch instructions, or move a web demo to future work. Do not imply that a web version already exists.</p>
-				<h4>My suggested addition</h4>
-				<p>Add a small fidelity matrix with columns for official behavior, simulator behavior, reason and expected learning consequence. It will make every deviation auditable instead of burying them in prose.</p>
-			`,
-		},
-		{
-			id: "371aa1bf-7b79-8042-aae0-fbca948be7c3",
-			context: "The Environment",
-			html: `
-				<h4>Update stale technical details</h4>
-				<ul>
-					<li>The flattened entity vector is currently 26 features, not 25.</li>
-					<li>The raw Gymnasium spaces use natural ranges, but <code>CRFlattenNormWrapper</code> maps scalar and entity features to approximately <code>[-1, 1]</code>. Make the tables distinguish raw space from network input.</li>
-					<li>Variable entity sequences are padded to <code>max_num_objects = 32</code> per player before entering the network.</li>
-					<li>Player-two observations and actions are rotated by 180 degrees. This symmetry fix is important enough to describe because it prevents the network learning an arbitrary absolute side.</li>
-					<li>The position mask is currently static and restricted to one half of the arena. It does not yet model tower-dependent territory, bridge exceptions or spell-specific targeting.</li>
-				</ul>
-				<h4>Rewrite the reward subsection</h4>
-				<p>Show the exact current defaults: terminal win reward <code>5.0</code>, tower destruction reward <code>0.5</code>, tower damage scale <code>1/5000</code> and step penalty <code>0.0</code>. Explain that the reward is zero-sum between players and that the 5:00 tiebreaker also receives the terminal outcome reward.</p>
-				<p>The step-penalty evidence is mixed. Run 13 was slightly worse, while run 19 looked better on some curves but did not materially change termination versus truncation. Keep the default at zero and describe the result as inconclusive, not rejected or beneficial.</p>
-				<p>The comment suggesting removal of the tower-destruction bonus and a larger damage scale should become a reward ablation, not a silent edit. Compare: outcome only, outcome plus HP damage, outcome plus destruction bonus, and the full reward. Log each reward component separately.</p>
-				<h4>My suggested addition</h4>
-				<p>Add the current joint action semantics: skip is sampled first conceptually, card and position log probabilities contribute only when not skipping, unaffordable cards are masked and skipping is forced when every card is unaffordable.</p>
-			`,
-		},
-		{
-			id: "386aa1bf-7b79-8059-aec7-eb19ad52288a",
-			context: "Performance Optimisation",
-			html: `
-				<h4>Replace the TODO with measured results</h4>
-				<p>The strongest measured optimization was pathfinding caching and related rollout-side work. In the recorded 8-environment benchmark, rollout collection improved from <strong>97.4 seconds</strong> for 9,600 steps to <strong>32.1 seconds</strong>. Throughput rose from about <strong>99</strong> to <strong>302 steps per second</strong>, roughly a 3.0x end-to-end rollout improvement. Average timed environment work fell from <strong>61.6 ms</strong> to <strong>7.1 ms</strong> per vector step.</p>
-				<p>PPO update time remained roughly one second, which shows that environment simulation, especially pathfinding, was the dominant bottleneck. Also mention CPU rollout inference and GPU PPO updates as a useful split, but keep it separate from the isolated pathfinding comparison.</p>
-				<h4>How to present it</h4>
-				<ul>
-					<li>Use one before-and-after table with collection time, steps per second, environment frame time, GAE time and PPO update time.</li>
-					<li>State hardware and exact command beside every benchmark. Do not combine Mac, Windows, WSL, Kaggle and Asus numbers into one speedup claim.</li>
-					<li>Explain the engineering mechanism: cached tiled occupancy state and fewer repeated pathfinding computations, not merely “optimized the simulator.”</li>
-				</ul>
-				<h4>My suggested addition</h4>
-				<p>Add a percentage breakdown of rollout collection, GAE and PPO update time. It makes the optimization priority obvious and explains why network micro-optimizations were lower leverage.</p>
-			`,
-		},
-		{
 			id: "371aa1bf-7b79-80c7-9c06-c3ae5630cdc2",
 			context: "The Algorithm",
 			html: `

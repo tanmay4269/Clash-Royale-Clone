@@ -1560,7 +1560,7 @@
 				<h3 id="simulator-fidelity-matrix" class="">Fidelity matrix</h3>
 			</div>
 			<div style="display:contents" dir="ltr">
-				<table class="simple-table">
+				<table class="simple-table fidelity-matrix">
 					<thead class="simple-table-header">
 						<tr>
 							<th class="simple-table-header-color simple-table-header">Official behavior</th>
@@ -1597,10 +1597,8 @@
 					</tbody>
 				</table>
 			</div>
-			<div style="display:contents" dir="auto">
+			<div class="section-callout-danger" dir="auto">
 				<h3 id="simulator-ablation-plan" class="">Required ablations</h3>
-			</div>
-			<div style="display:contents" dir="auto">
 				<ul class="bulleted-list">
 					<li style="list-style-type:disc"><strong>Tower statistics:</strong> compare symmetric and asymmetric
 						levels with identical seeds. Measure deployment rate, tower damage, game length and win rate.
@@ -1622,12 +1620,15 @@
 				<h1 id="371aa1bf-7b79-8042-aae0-fbca948be7c3" class="">The Environment</h1>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="371aa1bf-7b79-802a-b22d-ee65e4acd3ba" class="">Implemented using the standard <a
-						href="https://gymnasium.farama.org/index.html">Gymnasium</a> environment. </p>
+				<p id="371aa1bf-7b79-802a-b22d-ee65e4acd3ba" class="">The simulator is exposed through a standard <a
+						href="https://gymnasium.farama.org/index.html">Gymnasium</a> environment. Gymnasium defines the
+					raw observation and action spaces, while a wrapper flattens and normalizes observations before they
+					enter the policy network.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="371aa1bf-7b79-80a8-ba0e-e8e1284adeeb" class="">This is the interface between the RL algorithm and
-					the simulator.</p>
+				<p id="371aa1bf-7b79-80a8-ba0e-e8e1284adeeb" class="">Each policy sees its own cards, towers, hand,
+					next card and elixir, plus the opponent’s deployed cards and towers. The opponent’s hand, next card
+					and elixir remain hidden.</p>
 			</div>
 			<div style="display:contents" dir="auto">
 				<p id="371aa1bf-7b79-807d-bcab-eb10f4089ad5" class="">The simulator runs at 4 FPS resulting in a full
@@ -1635,15 +1636,20 @@
 			</div>
 			<div style="display:contents" dir="auto">
 				<blockquote id="371aa1bf-7b79-80b9-8abe-da013f73769b" class=""><em><strong>TL;DR:</strong></em>
-					<br />The environment encodes each entity as a vector.<br />An action is composed of:
-					<code>skip | card | position</code> decisions.<br />Reward function gives dense signals and sparse
-					signals throughout the game duration. </blockquote>
+					<br />Each entity becomes a normalized 26-feature vector.<br />Variable deployed-entity sequences
+					are padded to 32 slots per player.<br />An action is composed of
+					<code>skip | card | position</code> decisions.<br />The default reward is zero-sum and combines
+					tower damage, tower destruction and the terminal outcome.</blockquote>
 			</div>
 			<div style="display:contents" dir="auto">
 				<details open="">
 					<summary style="font-weight:600;font-size:1.25em;line-height:1.3;margin:0">Observation space:
 					</summary>
 					<div class="indented">
+						<div style="display:contents" dir="auto">
+							<p><strong>Raw Gymnasium observation:</strong> values use their natural game ranges and
+								deployed entities remain variable-length sequences.</p>
+						</div>
 						<div style="display:contents" dir="ltr">
 							<table id="371aa1bf-7b79-8024-b9f3-e63b8c01b025" class="simple-table">
 								<thead class="simple-table-header">
@@ -1653,8 +1659,8 @@
 											</th>
 											<th id="FZj}" class="simple-table-header-color simple-table-header">Space
 												Type</th>
-											<th id="I^~E" class="simple-table-header-color simple-table-header">Shape /
-												Values</th>
+											<th id="I^~E" class="simple-table-header-color simple-table-header">Raw
+												shape / range</th>
 											<th id="aEJX" class="simple-table-header-color simple-table-header">
 												Description</th>
 										</tr>
@@ -1672,8 +1678,8 @@
 									<div style="display:contents" dir="ltr">
 										<tr id="371aa1bf-7b79-8085-a652-f46902924059">
 											<td id="kbYE" class=""><code>player_1_elixirs</code></td>
-											<td id="FZj}" class="">Continuous</td>
-											<td id="I^~E" class=""><code>(1,) ∈ [0,1]</code></td>
+											<td id="FZj}" class="">Discrete(11)</td>
+											<td id="I^~E" class=""><code>{0,...,10}</code></td>
 											<td id="aEJX" class="">Current elixir count</td>
 										</tr>
 									</div>
@@ -1712,8 +1718,8 @@
 									<div style="display:contents" dir="ltr">
 										<tr id="371aa1bf-7b79-80d5-88d3-f886128246c8">
 											<td id="kbYE" class=""><code>player_2_elixirs</code></td>
-											<td id="FZj}" class="">Continuous</td>
-											<td id="I^~E" class=""><code>(1,) ∈ [0,1]</code></td>
+											<td id="FZj}" class="">Discrete(11)</td>
+											<td id="I^~E" class=""><code>{0,...,10}</code></td>
 											<td id="aEJX" class="">Current elixir count</td>
 										</tr>
 									</div>
@@ -1753,7 +1759,7 @@
 							</table>
 						</div>
 						<div style="display:contents" dir="auto">
-							<h4 id="371aa1bf-7b79-8043-9ccb-e09f3462776d" class="">Entity Space</h4>
+							<h4 id="371aa1bf-7b79-8043-9ccb-e09f3462776d" class="">Raw entity space</h4>
 						</div>
 						<div style="display:contents" dir="ltr">
 							<table id="371aa1bf-7b79-80d6-b5af-ebf29ea1bfe3" class="simple-table">
@@ -1892,6 +1898,61 @@
 								</tbody>
 							</table>
 						</div>
+						<div style="display:contents" dir="auto">
+							<p><strong>Network representation:</strong> <code>CRFlattenNormWrapper</code> flattens each
+								entity to 26 features and maps bounded values to approximately <code>[-1, 1]</code>.
+								The trainer then pads each player’s deployed entities to
+								<code>max_num_objects = 32</code>.</p>
+						</div>
+						<div style="display:contents" dir="ltr">
+							<table class="simple-table">
+								<thead class="simple-table-header">
+									<tr>
+										<th class="simple-table-header-color simple-table-header">Policy input</th>
+										<th class="simple-table-header-color simple-table-header">Network shape</th>
+										<th class="simple-table-header-color simple-table-header">Encoding</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<td><code>game_completion_fraction</code></td>
+										<td><code>(1,)</code></td>
+										<td>Normalized to <code>[-1, 1]</code></td>
+									</tr>
+									<tr>
+										<td><code>elixirs</code></td>
+										<td><code>(1,)</code></td>
+										<td>Normalized from <code>[0, 10]</code> to <code>[-1, 1]</code></td>
+									</tr>
+									<tr>
+										<td><code>my_cards</code>, <code>opponent_cards</code></td>
+										<td><code>(32, 26)</code> each</td>
+										<td>Normalized entities, zero-padded to 32 slots</td>
+									</tr>
+									<tr>
+										<td><code>my_crown_towers</code>, <code>opponent_crown_towers</code></td>
+										<td><code>(3, 26)</code> each</td>
+										<td>King tower followed by two princess towers</td>
+									</tr>
+									<tr>
+										<td><code>my_hand</code></td>
+										<td><code>(4, 26)</code></td>
+										<td>Four currently playable cards</td>
+									</tr>
+									<tr>
+										<td><code>my_next_card</code></td>
+										<td><code>(1, 26)</code></td>
+										<td>Next card entering the hand</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+						<div style="display:contents" dir="auto">
+							<p><strong>Player symmetry:</strong> player-two entity coordinates are rotated by 180
+								degrees before entering the network, and its selected position is rotated back before
+								being sent to the environment. Both policies therefore learn from the same canonical
+								side instead of memorizing an absolute arena orientation.</p>
+						</div>
 					</div>
 				</details>
 			</div>
@@ -2010,11 +2071,27 @@
 								</tbody>
 							</table>
 						</div>
+						<div style="display:contents" dir="auto">
+							<p><strong>Policy semantics:</strong> skip is the gate for the joint action. Card and
+								position log probabilities, and their entropy terms, contribute only when
+								<code>skip = 0</code>. Cards costing more than the current elixir are masked. If all
+								four cards are unaffordable, skipping is forced.</p>
+						</div>
+						<div style="display:contents" dir="auto">
+							<p><strong>Position mask:</strong> deployment is currently restricted by one static mask
+								to the policy’s own half. It does not yet unlock territory after a princess tower
+								falls, model bridge-specific deployment exceptions, or give spells a separate
+								targeting mask.</p>
+						</div>
 					</div>
 				</details>
 			</div>
 			<div style="display:contents" dir="auto">
 				<h3 id="371aa1bf-7b79-80f8-ae98-e77bef41ed99" class="">Reward function:</h3>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p>The environment returns one reward per player at every step. The default reward is zero-sum:
+					tower damage, tower destruction and game outcome are equal and opposite between players.</p>
 			</div>
 			<div style="display:contents" dir="auto">
 				<ul id="371aa1bf-7b79-8011-9751-ecb071a4936c" class="bulleted-list">
@@ -2059,7 +2136,9 @@
 				<ul id="371aa1bf-7b79-80ad-a1a6-c7b65296171f" class="bulleted-list">
 					<li style="list-style-type:disc">(Optional) <strong>Step penalty</strong>: each step during the
 						game, inflicting a small negative reward is generally done to encourage ending the game sooner.
-						But empirically it didn’t seem to help with that for this game.</li>
+						The evidence here was mixed: run 13 was slightly worse, while run 19 improved some curves but
+						did not materially change the termination-to-truncation ratio. The default remains
+						<code>0.0</code>.</li>
 				</ul>
 			</div>
 			<div style="display:contents" dir="auto">
@@ -2067,8 +2146,8 @@
 					effective reward function the agent receives at each step. </p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="371aa1bf-7b79-8045-bb53-f6fc53233f49" class="">The weights are chosen such that cumulatively at
-					the end of the game follow this inequation:</p>
+				<p id="371aa1bf-7b79-8045-bb53-f6fc53233f49" class="">The intended priority of the cumulative reward
+					components is:</p>
 			</div>
 			<div style="display:contents" dir="auto">
 				<figure id="371aa1bf-7b79-8011-87eb-ed02d599ed65" class="equation">
@@ -2172,21 +2251,18 @@
 				</figure>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="371aa1bf-7b79-8069-b4a8-ffbfe4d9aed5" class="">This is done to balance high and low frequency
-					rewards where low frequency happens to be more “ground truth” in nature while high frequency are for
-					“reward shaping”. Weighing them this way gives a clear signal to the model to prioritise which
-					signal, we’d like “close to ground truth” signals have higher weight.</p>
+				<p id="371aa1bf-7b79-8069-b4a8-ffbfe4d9aed5" class="">This balances low-frequency outcome signals
+					against high-frequency shaping signals. The terminal outcome remains the clearest objective, while
+					damage and destruction provide earlier feedback about actions that move toward it.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="371aa1bf-7b79-8012-a73c-c0afd9d4b49a" class=""><strong>Reward shaping</strong>: done to promoting
-					certain behaviour early on because just win and loose might be too sparse a signal to help the
-					policy learn what actions did well. But doing this shaping too much is hand holding plus adds in
-					inductive biases that could lead to suboptimal minimas. A good training algorithm usually doesn’t
-					need such hand holding.</p>
+				<p id="371aa1bf-7b79-8012-a73c-c0afd9d4b49a" class=""><strong>Reward shaping</strong> provides denser
+					feedback because win and loss alone can be too sparse early in training. Too much shaping can encode
+					unwanted inductive biases and lead the policy toward strategies that optimize the proxy rather than
+					winning.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="371aa1bf-7b79-8009-93e4-fdd415adf6ff" class="">The configuration that worked well is as follows:
-				</p>
+				<p id="371aa1bf-7b79-8009-93e4-fdd415adf6ff" class="">The current default configuration is:</p>
 			</div>
 			<div style="display:contents" dir="ltr">
 				<table id="371aa1bf-7b79-802a-a859-c8c4634129c7" class="simple-table">
@@ -2234,19 +2310,138 @@
 							<tr id="371aa1bf-7b79-80d0-81e1-f1599e0c8a7d">
 								<td id="wPud" class="" style="width:209.6640625px"><code>step_penalty</code></td>
 								<td id="cIVm" class="" style="width:203.2421875px"><code>1200</code></td>
-								<td id="mF:S" class=""><code>0</code> (<code>0.001</code>)</td>
-								<td id="OrSS" class=""><code>0</code> (<code>1.2</code>)</td>
+								<td id="mF:S" class=""><code>0.0</code></td>
+								<td id="OrSS" class=""><code>0.0</code></td>
 							</tr>
 						</div>
 					</tbody>
 				</table>
 			</div>
 			<div style="display:contents" dir="auto">
+				<h4>Current implementation summary</h4>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p>The environment returns one reward per player on every step. Tower damage, tower destruction and
+					game outcome are equal and opposite between players. The optional step penalty is applied to both
+					players, but its current default is zero, so the default total reward is zero-sum.</p>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<table class="simple-table">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header">Component</th>
+							<th class="simple-table-header-color simple-table-header">Current default</th>
+							<th class="simple-table-header-color simple-table-header">When applied</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Terminal outcome</td>
+							<td><code>±5.0</code></td>
+							<td>King-tower win, sudden-death win, or the 5:00 hit-point tiebreaker</td>
+						</tr>
+						<tr>
+							<td>Tower destruction</td>
+							<td><code>±0.5</code></td>
+							<td>When any crown tower crosses from positive health to zero</td>
+						</tr>
+						<tr>
+							<td>Tower damage</td>
+							<td><code>±damage / 5000</code></td>
+							<td>For each change in crown-tower health</td>
+						</tr>
+						<tr>
+							<td>Step penalty</td>
+							<td><code>0.0</code></td>
+							<td>Every environment step, when enabled</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p>The terminal outcome reward also applies when the 5:00 time limit is reached and the hit-point
+					tiebreaker selects a winner. A true draw receives no terminal bonus.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p><strong>Step-penalty evidence is inconclusive:</strong> run 13 was slightly worse, while run 19
+					improved some curves but did not materially change the termination-to-truncation ratio. The default
+					therefore remains <code>0.0</code>.</p>
+			</div>
+			<div class="section-callout-danger" dir="auto">
+				<h4>Required reward ablation</h4>
+				<p>Compare outcome only, outcome plus HP damage, outcome plus destruction bonus, and the full reward.
+					Log HP-delta, destruction, outcome and step-penalty contributions separately. Changes to the
+					destruction bonus or damage scale should be tested here rather than silently adopted.</p>
+			</div>
+			<div style="display:contents" dir="auto">
 				<h3 id="386aa1bf-7b79-8059-aec7-eb19ad52288a" class="">Performance Optimisation</h3>
 			</div>
 			<div style="display:contents" dir="auto">
-				<p id="386aa1bf-7b79-80e5-8fac-d73275a82127" class=""><mark
-						class="highlight-blue_background">[TODO]</mark></p>
+				<p id="386aa1bf-7b79-80e5-8fac-d73275a82127" class="">Profiling showed that rollout
+					collection, not the PPO update, was the main bottleneck. The largest measured improvement came from
+					reducing repeated pathfinding work.</p>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<table class="simple-table">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header">Metric</th>
+							<th class="simple-table-header-color simple-table-header">Baseline</th>
+							<th class="simple-table-header-color simple-table-header">Pathfinding optimised</th>
+							<th class="simple-table-header-color simple-table-header">Change</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Rollout collection</td>
+							<td><code>97.398 s</code> (98.7%)</td>
+							<td><code>32.084 s</code> (96.1%)</td>
+							<td>3.0x faster</td>
+						</tr>
+						<tr>
+							<td>Reported rollout throughput</td>
+							<td><code>98.86 steps/s</code></td>
+							<td><code>302.07 steps/s</code></td>
+							<td>3.1x higher</td>
+						</tr>
+						<tr>
+							<td>Average timed environment work per vector step</td>
+							<td><code>61.631 ms</code></td>
+							<td><code>7.120 ms</code></td>
+							<td>8.7x lower</td>
+						</tr>
+						<tr>
+							<td>GAE computation</td>
+							<td><code>264.405 ms</code> (0.3%)</td>
+							<td><code>274.553 ms</code> (0.8%)</td>
+							<td>Effectively unchanged</td>
+						</tr>
+						<tr>
+							<td>PPO update</td>
+							<td><code>1.030 s</code> (1.0%)</td>
+							<td><code>1.012 s</code> (3.0%)</td>
+							<td>Effectively unchanged</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p>The percentages are each phase’s share of collection, GAE and PPO-update time combined. Even after
+					the optimisation, rollout collection consumed 96.1% of the measured time, so simulator work remained
+					much higher leverage than network-update micro-optimisations.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p><strong>What changed:</strong> the arena now caches its 18 × 32 ground and air occupancy grids and
+					the corresponding free-cell lists. These caches are rebuilt only when a building changes the grid.
+					Troops also reuse existing waypoints, recomputing a path only when the target moves by more than one
+					tile, the occupancy grid changes, the path is exhausted, or a periodic refresh is reached. This
+					removes repeated grid reduction and path searches from most simulator ticks.</p>
+			</div>
+			<div style="display:contents" dir="auto">
+				<p>Rollout inference is separately batched on the CPU, while PPO minibatch updates run on the GPU. This
+					avoids many small accelerator calls during environment stepping and reserves the GPU for the larger
+					training batches. This device split is useful, but it is not part of the isolated pathfinding
+					speedup reported above.</p>
 			</div>
 			<div style="display:contents" dir="auto">
 				<h1 id="371aa1bf-7b79-80c7-9c06-c3ae5630cdc2" class="">The Algorithm</h1>

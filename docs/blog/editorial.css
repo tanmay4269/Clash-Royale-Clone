@@ -68,6 +68,15 @@ article.page {
 	white-space: normal;
 }
 
+article p,
+article li,
+article blockquote,
+article th,
+article td {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
 article.page > header {
 	position: relative;
 	padding: 7rem 0 3rem;
@@ -385,6 +394,7 @@ article figcaption {
 	max-width: 100%;
 	margin: 1.6rem auto;
 	overflow-x: auto;
+	padding-bottom: 0.65rem;
 	border: 1px solid var(--line);
 	border-radius: 10px;
 	background: transparent;
@@ -404,6 +414,47 @@ article td {
 	padding: 0.65rem 0.8rem;
 	border-color: var(--line);
 	background: transparent;
+	white-space: normal;
+	vertical-align: top;
+}
+
+article .fidelity-matrix {
+	width: 100%;
+	min-width: 760px;
+	margin: 0 !important;
+	table-layout: fixed;
+}
+
+.table-scroll:has(.fidelity-matrix) {
+	width: 100%;
+	margin-top: 0.85rem;
+}
+
+.table-scroll:has(.fidelity-matrix)::-webkit-scrollbar {
+	height: 8px;
+}
+
+.table-scroll:has(.fidelity-matrix)::-webkit-scrollbar-thumb {
+	border-radius: 999px;
+	background: #bbb5aa;
+}
+
+.section-callout-danger {
+	margin: 1.75rem 0;
+	padding: 1rem 1.2rem;
+	border: 1px solid rgba(179, 52, 42, 0.35);
+	border-left: 5px solid #b3342a;
+	border-radius: 0 10px 10px 0;
+	background: rgba(223, 22, 0, 0.075);
+}
+
+.section-callout-danger h3 {
+	margin-top: 0;
+	color: #8f2b23;
+}
+
+.section-callout-danger > :last-child {
+	margin-bottom: 0;
 }
 
 article .code,
