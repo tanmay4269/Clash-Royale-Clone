@@ -1,31 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
 	const revisions = [
 		{
-			id: "382aa1bf-7b79-8084-9fe0-d2e6c7a84967",
-			context: "Training Algorithm",
-			html: `
-				<h4>Turn the placeholder list into a data-flow explanation</h4>
-				<ol>
-					<li>Collect independent trajectories in parallel environments. Each environment keeps a separate contiguous buffer so GAE does not cross episode or environment boundaries.</li>
-					<li>Compute GAE per environment, then merge buffers and shuffle minibatches for PPO updates.</li>
-					<li>Set rollout size as <code>game_duration × 4 FPS × num_games_in_buffer</code>. Explain the tradeoff: larger rollouts give more diverse targets but make each update less frequent and can waste early low-quality experience.</li>
-					<li>Use Adam because the gradients are noisy and differently scaled across actor, critic and position heads. Avoid claiming it is optimal without an optimizer ablation.</li>
-					<li>Describe the LR finder, linear LR decay and entropy-coefficient schedule separately. The current default entropy coefficient is constant at <code>0.01</code> because initial and final values are equal.</li>
-					<li>Describe PPO clipping, optional KL early stopping, global or per-head gradient clipping, minibatch advantage normalization and optional observation/value normalization.</li>
-				</ol>
-				<h4>Explain self-play matchmaking precisely</h4>
-				<p>A checkpoint is saved after at least 100 games when the recent mean score reaches 0.55. During sampling, half the time the latest available checkpoint is chosen. Otherwise, opponents are weighted toward an expected 50 percent matchup using Elo. Each parallel environment owns a separate opponent instance, and both the learner and checkpoint Elo values are updated after games.</p>
-				<h4>Separate defaults from historical run settings</h4>
-				<p>The current code defaults include gamma <code>0.99</code>, lambda <code>0.95</code>, 40 PPO epochs, minibatch size 2,048 and optional KL early stopping disabled. Historical successful runs used different values, including gamma <code>0.997</code> and minibatch size 256. Put those in the experiment table rather than describing them as current defaults.</p>
-				<h4>My suggested additions</h4>
-				<ul>
-					<li>Include pseudocode for one complete update, from rollout to checkpoint update.</li>
-					<li>Log checkpoint-manager score and checkpoint sampling frequencies. These are still missing from the current diagnostics.</li>
-					<li>Persist running diagnostic state on resume, not only model, optimizer, Elo and checkpoint metadata.</li>
-				</ul>
-			`,
-		},
-		{
 			id: "371aa1bf-7b79-8012-bc27-f64d8a45a5ec",
 			context: "Experiments",
 			html: `

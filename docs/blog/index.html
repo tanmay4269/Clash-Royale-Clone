@@ -2462,140 +2462,6 @@
 						below</a>.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<h2>Default training configuration</h2>
-			</div>
-			<div style="display:contents" dir="auto">
-				<p>This table freezes the defaults used by the current command-line training entry point. Historical
-					runs changed several of these values, so their experiment records should be read as overrides rather
-					than descriptions of the final default system.</p>
-			</div>
-			<div style="display:contents" dir="ltr">
-				<table class="simple-table">
-					<thead class="simple-table-header">
-						<tr>
-							<th class="simple-table-header-color simple-table-header">Area</th>
-							<th class="simple-table-header-color simple-table-header">Setting</th>
-							<th class="simple-table-header-color simple-table-header">Current CLI default</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td rowspan="8">Network</td>
-							<td>Architecture</td>
-							<td><code>deep_sets</code></td>
-						</tr>
-						<tr>
-							<td>Activation</td>
-							<td><code>Tanh</code></td>
-						</tr>
-						<tr>
-							<td>Actor and critic</td>
-							<td>Disjoint encoders and trunks</td>
-						</tr>
-						<tr>
-							<td>Entity attention</td>
-							<td>Enabled</td>
-						</tr>
-						<tr>
-							<td>Card decoder</td>
-							<td>Pointer decoder</td>
-						</tr>
-						<tr>
-							<td>Position decoder</td>
-							<td>Card-conditioned transposed-convolution decoder</td>
-						</tr>
-						<tr>
-							<td>Initialization</td>
-							<td>Orthogonal initialization enabled</td>
-						</tr>
-						<tr>
-							<td>Action temperatures</td>
-							<td>Learned independently per head</td>
-						</tr>
-						<tr>
-							<td rowspan="9">PPO</td>
-							<td>Discount factor, <code>γ</code></td>
-							<td><code>0.997</code></td>
-						</tr>
-						<tr>
-							<td>GAE factor, <code>λ</code></td>
-							<td><code>0.95</code></td>
-						</tr>
-						<tr>
-							<td>Rollout size</td>
-							<td>8 games, <code>9,600</code> transitions</td>
-						</tr>
-						<tr>
-							<td>PPO epochs per rollout</td>
-							<td><code>8</code></td>
-						</tr>
-						<tr>
-							<td>Minibatch size</td>
-							<td><code>2,048</code></td>
-						</tr>
-						<tr>
-							<td>Policy clip coefficient</td>
-							<td><code>0.2</code></td>
-						</tr>
-						<tr>
-							<td>Critic-loss coefficient</td>
-							<td><code>0.5</code></td>
-						</tr>
-						<tr>
-							<td>Entropy coefficient</td>
-							<td><code>0.01</code>, constant</td>
-						</tr>
-						<tr>
-							<td>Gradient clipping</td>
-							<td>Global norm <code>0.5</code></td>
-						</tr>
-						<tr>
-							<td rowspan="4">Optimisation</td>
-							<td>Optimizer</td>
-							<td>Adam</td>
-						</tr>
-						<tr>
-							<td>Initial learning rate</td>
-							<td><code>1.5 × 10⁻⁴</code></td>
-						</tr>
-						<tr>
-							<td>Learning-rate schedule</td>
-							<td>Linear decay to zero over 10 million environment steps</td>
-						</tr>
-						<tr>
-							<td>Automatic LR finder</td>
-							<td>Disabled</td>
-						</tr>
-						<tr>
-							<td rowspan="5">Collection and self-play</td>
-							<td>Parallel environments</td>
-							<td><code>8</code></td>
-						</tr>
-						<tr>
-							<td>Opponent mode</td>
-							<td>Checkpoint self-play, no overfit opponent</td>
-						</tr>
-						<tr>
-							<td>Checkpoint admission</td>
-							<td>At least 100 games and recent mean score ≥ <code>0.55</code></td>
-						</tr>
-						<tr>
-							<td>Opponent sampling</td>
-							<td>50% latest checkpoint, otherwise Elo-weighted toward an even matchup</td>
-						</tr>
-						<tr>
-							<td>Observation and value normalization</td>
-							<td>Disabled</td>
-						</tr>
-						<tr>
-							<td>Optional safety</td>
-							<td>KL early stopping</td>
-							<td>Disabled, threshold retained at <code>0.01</code></td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
-			<div style="display:contents" dir="auto">
 				<h2 id="371aa1bf-7b79-806b-b5cf-e80fc0b7a22e" class="">Network</h2>
 			</div>
 			<div style="display:contents" dir="auto">
@@ -2870,181 +2736,395 @@ Outputs
 				<h2 id="382aa1bf-7b79-8084-9fe0-d2e6c7a84967" class="">Training Algorithm</h2>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="382aa1bf-7b79-8034-bc8a-efe1c2abf9d0" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span class="to-do-children-unchecked">Optimiser =
-							Adam (why?)</span>
-						<div class="indented"></div>
-					</li>
-				</ul>
+				<p>Training alternates between collecting fresh self-play experience and reusing that rollout for
+					several PPO epochs. Environment workers and rollout inference run on the CPU. The merged rollout is
+					then shuffled into minibatches and used to update the main network on the selected training device.
+					The implementation follows the clipped PPO objective derived in the appendix, with GAE for credit
+					assignment and an Elo-rated checkpoint pool for opponent selection.</p>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<pre class="code code-wrap"><code class="language-text" style="white-space:pre;word-break:normal">Repeat until 10M environment steps
+	├── copy the current policy to the CPU rollout network
+	├── step 8 environment workers synchronously
+	│	├── current policy controls player 2
+	│	└── sampled checkpoint controls player 1
+	├── store states, actions, old log probabilities, rewards and values
+	├── compute GAE separately for every environment trajectory
+	├── merge the per-environment buffers
+	├── optionally filter or normalize the rollout
+	├── run 8 PPO epochs over shuffled minibatches of 2,048 transitions
+	└── update diagnostics, Elo ratings and the checkpoint pool</code></pre>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-8037-a875-f6a5a36253a3" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span class="to-do-children-unchecked">learning rate
-							tuner </span>
-						<div class="indented"></div>
-					</li>
-				</ul>
+				<h4>Rollout buffer and GAE</h4>
+				<p><code>RolloutBuffer</code> stores the observation, sampled action, old policy log probability,
+					reward, value estimate and termination flag for every transition. After collection, it computes
+					generalized advantage estimates (GAE) backwards through each trajectory, then forms critic targets as
+					<code>return = advantage + value</code>. Time-limit truncations remain bootstrapable, while true
+					terminal states stop the recursion.</p>
+				<p>The discount factor <code>γ = 0.997</code> determines how much distant reward matters. The GAE
+					factor <code>λ = 0.95</code> controls the bias-variance tradeoff: lower values rely more on the
+					critic and reduce variance, while values nearer one use longer sampled returns and reduce bias.
+					Advantages are normalized independently inside every minibatch before the policy loss is computed.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-80db-b1d3-fa4f0a2b9366" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span
-							class="to-do-children-unchecked"><code>ParallelEnvManager</code></span>
-						<div class="indented"></div>
-					</li>
-				</ul>
+				<h4>Rollout length</h4>
+				<p>The rollout target is calculated as one full game's maximum number of frames multiplied by
+					<code>num_games_in_buffer</code>. With a 1,200-step maximum game and the CLI default of eight games,
+					each PPO update collects 9,600 transitions across all workers.</p>
+				<p>Larger rollouts produce more varied and less correlated training data, but increase the delay between
+					policy updates and require more memory. Smaller rollouts update more frequently, but each batch has
+					noisier advantage estimates and is easier to overfit. The useful target is therefore measured in
+					complete games, not an arbitrary power-of-two step count.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-80de-b75d-dcea4bed0d30" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span
-							class="to-do-children-unchecked"><code>RolloutBuffer</code></span>
-						<div class="indented">
-							<div style="display:contents" dir="auto">
-								<ul id="386aa1bf-7b79-80e9-bae0-cba62afce0d2" class="to-do-list">
-									<li>
-										<div class="checkbox checkbox-off"></div> <span
-											class="to-do-children-unchecked"><code>gae_gamma</code>,
-											<code>gae_lambda</code></span>
-										<div class="indented"></div>
-									</li>
-								</ul>
-							</div>
-							<div style="display:contents" dir="auto">
-								<ul id="386aa1bf-7b79-80f9-802d-c5fbcc1ee5cd" class="to-do-list">
-									<li>
-										<div class="checkbox checkbox-off"></div> <span
-											class="to-do-children-unchecked"><code>n_steps</code> : how to set this? how
-											does this affect things?</span>
-										<div class="indented"></div>
-									</li>
-								</ul>
-							</div>
-						</div>
-					</li>
-				</ul>
+				<h4>Parallel rollout collection</h4>
+				<p><code>ParallelEnvManager</code> starts one independent Gymnasium environment in each worker process.
+					The parent sends one action to every worker, then waits for all results. This synchronous design is
+					simple and keeps each update based on policies from the same point in training, although every step
+					is limited by the slowest worker.</p>
+				<p>The current default is 8 workers. Active-agent observations are batched for one CPU network
+					call, while opponent policies are evaluated separately. A distinct buffer is maintained for each
+					worker so episode boundaries and GAE recursion are not mixed across environments.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-8018-a303-c15315673ede" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span class="to-do-children-unchecked">ELO system, ELO
-							based checkpoint sampler</span>
-						<div class="indented"></div>
-					</li>
-				</ul>
+				<h4>PPO minibatch update</h4>
+				<p>For each stored action, <code>on_batch_update</code> recomputes its log probability under the current
+					policy and forms the probability ratio <code>r = exp(log π_new − log π_old)</code>. The actor loss is
+					the negative minimum of the unclipped objective and the objective with <code>r</code> clipped to
+					<code>[0.8, 1.2]</code>. This is the same clipped surrogate objective developed in the PPO appendix.</p>
+				<p>The critic minimizes mean squared error against the GAE return target. The complete minimized loss is
+					<code>actor loss + 0.5 × critic loss − 0.01 × entropy</code>. The critic coefficient prevents the
+					numerically larger value error from dominating the shared optimization step. The entropy term
+					rewards broad action distributions and slows premature policy collapse.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-8083-b5a1-d5c4684796b7" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span
-							class="to-do-children-unchecked"><code>ppo_update</code></span>
-						<div class="indented">
-							<div style="display:contents" dir="auto">
-								<ul id="386aa1bf-7b79-80dc-ab62-dd3dbb7fed07" class="bulleted-list">
-									<li style="list-style-type:disc"><code>on_batch_update</code> === same as the ppo
-										algo given in the appendix</li>
-								</ul>
-							</div>
-							<div style="display:contents" dir="auto">
-								<ul id="386aa1bf-7b79-805a-ae68-cec4877ca5c9" class="bulleted-list">
-									<li style="list-style-type:disc">everything thats logged and why</li>
-								</ul>
-							</div>
-						</div>
-					</li>
-				</ul>
+				<h4>Optimizer and learning rate</h4>
+				<p>Adam updates all trainable parameters. Its moving estimates of gradient mean and variance give each
+					parameter an adaptive step size, which is useful here because the actor heads, critic and shared
+					representations can produce gradients on different scales. Adam is a stability-motivated default,
+					not an optimizer comparison established by this project.</p>
+				<p>The CLI default starts at <code>1.5 × 10⁻⁴</code> and decays linearly to zero as
+					<code>global_step</code> approaches <code>max_steps = 10,000,000</code>. The same progress fraction
+					can interpolate the entropy coefficient, although both current endpoints are <code>0.01</code>, so
+					it remains constant.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-806f-adfe-c3e9336d50e7" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span
-							class="to-do-children-unchecked"><code>per_head_grad_clip</code> vs global grad clip</span>
-						<div class="indented"></div>
-					</li>
-				</ul>
+				<h4>Optional learning-rate finder</h4>
+				<p>The learning-rate finder is disabled by default. When enabled, it runs once on the first rollout
+					using a temporary network and Adam optimizer. It increases the rate exponentially from
+					<code>10⁻⁷</code> to <code>10⁻¹</code> over at most 200 minibatches, tracks an exponentially
+					smoothed critic loss, stops after clear divergence, then selects 30% of the rate with the lowest
+					smoothed loss.</p>
+				<p>Only critic loss is used as the search signal because large trial steps immediately invalidate PPO's
+					policy ratio and make the combined actor objective a poor learning-rate probe. The selected rate
+					becomes the starting point for the normal linear schedule.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-8013-8228-d9604ae6716e" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span
-							class="to-do-children-unchecked"><code>ppo_clip</code></span>
-						<div class="indented"></div>
-					</li>
-				</ul>
+				<h4>Epoch count, clipping and KL control</h4>
+				<p>Each rollout is reused for eight PPO epochs. More epochs extract more optimization from expensive
+					simulator data, but they also move the policy farther from the behavior policy that generated that
+					data. The clip coefficient <code>0.2</code> limits how much any sampled action can influence the
+					surrogate objective once its probability ratio moves outside the accepted interval.</p>
+				<p>Approximate KL divergence measures the aggregate policy shift after each minibatch. Optional KL early
+					stopping ends the epoch loop when an epoch's mean approximate KL exceeds <code>0.01</code>. It is
+					disabled by default, so all eight epochs run. <code>clip_fraction</code> remains the most direct
+					signal for tuning rollout reuse: very low values mean the data is underused, while high values mean
+					many samples have already reached PPO's trust-region boundary.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-80cb-b896-d16236816cc7" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span
-							class="to-do-children-unchecked"><code>critic_loss_coef</code></span>
-						<div class="indented"></div>
-					</li>
-				</ul>
+				<h4>Gradient clipping</h4>
+				<p>The default applies one global gradient-norm limit of <code>0.5</code> across the complete network.
+					This preserves the relative contribution of every component while preventing a single unstable
+					minibatch from producing an excessive Adam step.</p>
+				<p>The optional per-head mode separately clips critic, position, skip, deck, pointer and remaining
+					backbone parameters. It prevents a large head, especially the 576-way position decoder, from using
+					the entire norm budget. The tradeoff is that independently clipped groups can have a combined norm
+					greater than <code>0.5</code>. It is therefore retained as an ablation and disabled by default.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-805e-b580-c2461cdfb7f0" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span
-							class="to-do-children-unchecked"><code>entropy_loss_coef_intial/final</code> </span>
-						<div class="indented"></div>
-					</li>
-				</ul>
+				<h4>Elo self-play and checkpoint sampling</h4>
+				<p>The current policy and every saved checkpoint begin at Elo 1,200, with scale 400 and update factor
+					32. After each game, both the active policy and its checkpoint opponent are updated from the result
+					and expected score. Elo is used as a matchmaking estimate inside one evolving training run, not as
+					an absolute measure comparable across unrelated runs.</p>
+				<figure class="equation">
+					<div class="equation-container">
+						<math xmlns="http://www.w3.org/1998/Math/MathML" display="block">
+							<semantics>
+								<mrow>
+									<msub><mi>E</mi><mi>A</mi></msub>
+									<mo>=</mo>
+									<mfrac>
+										<mn>1</mn>
+										<mrow>
+											<mn>1</mn>
+											<mo>+</mo>
+											<msup>
+												<mn>10</mn>
+												<mfrac>
+													<mrow><msub><mi>R</mi><mi>B</mi></msub><mo>−</mo><msub><mi>R</mi><mi>A</mi></msub></mrow>
+													<mn>400</mn>
+												</mfrac>
+											</msup>
+										</mrow>
+									</mfrac>
+								</mrow>
+								<annotation encoding="application/x-tex">E_A = \frac{1}{1 + 10^{(R_B - R_A)/400}}</annotation>
+							</semantics>
+						</math>
+					</div>
+				</figure>
+				<figure class="equation">
+					<div class="equation-container">
+						<math xmlns="http://www.w3.org/1998/Math/MathML" display="block">
+							<semantics>
+								<mrow>
+									<msubsup><mi>R</mi><mi>A</mi><mo>′</mo></msubsup>
+									<mo>=</mo>
+									<msub><mi>R</mi><mi>A</mi></msub>
+									<mo>+</mo>
+									<mn>32</mn>
+									<mo stretchy="false">(</mo>
+									<msub><mi>S</mi><mi>A</mi></msub>
+									<mo>−</mo>
+									<msub><mi>E</mi><mi>A</mi></msub>
+									<mo stretchy="false">)</mo>
+								</mrow>
+								<annotation encoding="application/x-tex">R'_A = R_A + 32(S_A - E_A)</annotation>
+							</semantics>
+						</math>
+					</div>
+				</figure>
+				<p>Here <code>R</code> is Elo rating, <code>E</code> is expected score, and <code>S</code> is the
+					observed score: 1 for a win, 0.5 for a draw and 0 for a loss. The opponent uses the same update with
+					the player labels reversed.</p>
+				<p>A new checkpoint is admitted only after at least 100 games and a recent mean score of at least
+					<code>0.55</code>. For each new opponent, the sampler chooses the latest eligible checkpoint with
+					50% probability. Otherwise it weights checkpoint Elo values toward an expected 50-50 matchup, then
+					samples a checkpoint at the chosen rating. Checkpoints already active in other workers are avoided
+					when alternatives exist, increasing opponent diversity.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-804d-9ace-c029d42eb29c" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span
-							class="to-do-children-unchecked"><code>max_steps</code></span>
-						<div class="indented"></div>
-					</li>
-				</ul>
+				<h4>Optional rollout preprocessing</h4>
+				<p>Forced-skip removal is disabled by default. When enabled, transitions where the agent cannot afford
+					any card are removed before PPO. This avoids training heavily on actions with no meaningful choice,
+					but it also changes the sampled state distribution and discards value-learning data from low-elixir
+					states.</p>
+				<p>Observation normalization is also disabled. Its optional implementation maintains exponential moving
+					mean and standard-deviation vectors from complete rollouts and applies them during both collection
+					and updates. Value normalization, also disabled, standardizes return targets over the current
+					rollout. The raw entity features are already normalized by the environment wrapper, while enabling
+					value normalization would require the critic's inference scale to be handled consistently.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-808b-94c2-fae794b463f5" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span
-							class="to-do-children-unchecked"><code>num_ppo_epochs</code></span>
-						<div class="indented"></div>
-					</li>
-				</ul>
+				<h4>Update diagnostics</h4>
+				<p>The PPO update logs the following aggregate measurements. They are diagnostic signals, not objectives
+					that should be optimized independently.</p>
+			</div>
+			<div style="display:contents" dir="ltr">
+				<table class="simple-table" style="table-layout:fixed;width:100%">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header" style="width:180px">Metric</th>
+							<th class="simple-table-header-color simple-table-header">Interpretation</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>actor_loss</code></td>
+							<td>Clipped policy objective. Useful for detecting update instability, but its absolute
+								scale is not a direct measure of playing strength.</td>
+						</tr>
+						<tr>
+							<td><code>critic_loss</code></td>
+							<td>Mean squared return-prediction error. Persistent growth indicates a value function that
+								is failing to track the policy's returns.</td>
+						</tr>
+						<tr>
+							<td><code>entropy</code></td>
+							<td>Average action uncertainty. A rapid collapse can indicate premature convergence.</td>
+						</tr>
+						<tr>
+							<td><code>ratio_mean</code></td>
+							<td>Mean new-to-old action probability ratio. It should remain near one for conservative
+								updates.</td>
+						</tr>
+						<tr>
+							<td><code>advantage_mean</code></td>
+							<td>Mean normalized minibatch advantage. It should remain near zero by construction.</td>
+						</tr>
+						<tr>
+							<td><code>explained_variance</code></td>
+							<td>How much return variance the critic explains. Values near one are strong, zero means no
+								predictive improvement over a constant, and negative values are worse.</td>
+						</tr>
+						<tr>
+							<td><code>pre_clip_grad_norm</code></td>
+							<td>Gradient magnitude used to detect exploding updates and frequent dependence on clipping.</td>
+						</tr>
+						<tr>
+							<td><code>critic_weight_norm</code></td>
+							<td>Tracks unbounded growth or drift in critic parameters.</td>
+						</tr>
+						<tr>
+							<td><code>value_mean</code></td>
+							<td>Average rollout value prediction, useful for identifying scale drift or critic collapse.</td>
+						</tr>
+						<tr>
+							<td><code>approx_kl</code></td>
+							<td>Estimated policy movement from the rollout policy. It also drives optional KL stopping.</td>
+						</tr>
+						<tr>
+							<td><code>clip_fraction</code></td>
+							<td>Fraction of samples outside the PPO ratio interval, used to judge whether epoch count
+								and learning rate underuse or overuse the rollout.</td>
+						</tr>
+						<tr>
+							<td><code>epochs_completed</code></td>
+							<td>Confirms how many requested epochs ran and whether KL stopping shortened the update.</td>
+						</tr>
+					</tbody>
+				</table>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-80e8-b67b-fa41ffc5ca8e" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span
-							class="to-do-children-unchecked"><code>kl_threshold</code>,
-							<code>kl_early_stopping</code></span>
-						<div class="indented"></div>
-					</li>
-				</ul>
+				<p>A separate diagnostics logger records Elo, returns, scores, game endings, tower kills, average
+					elixir, skip frequency, card and position usage, and per-head entropy and KL. These distinguish an
+					optimizer problem from policy collapse, degenerate action usage or changes in opponent difficulty.</p>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-807a-a708-d867cd6ec237" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span
-							class="to-do-children-unchecked"><code>drop_forced_skips</code></span>
-						<div class="indented"></div>
-					</li>
-				</ul>
+				<h2>Default training configuration</h2>
 			</div>
 			<div style="display:contents" dir="auto">
-				<ul id="386aa1bf-7b79-807c-8d24-eacd3e650822" class="to-do-list">
-					<li>
-						<div class="checkbox checkbox-off"></div> <span
-							class="to-do-children-unchecked"><code>obs_normalization</code>,
-							<code>value_normalization</code></span>
-						<div class="indented"></div>
-					</li>
-				</ul>
+				<p>This table freezes the defaults used by the current command-line training entry point. Historical
+					runs changed several of these values, so their experiment records should be read as overrides rather
+					than descriptions of the final default system.</p>
 			</div>
-			<div style="display:contents" dir="auto">
-				<p id="386aa1bf-7b79-807f-96c2-d1d7a2393c6d" class="">
-				</p>
-			</div>
-			<div style="display:contents" dir="auto">
-				<hr id="386aa1bf-7b79-80a9-a53b-df272417d068" />
+			<div style="display:contents" dir="ltr">
+				<table class="simple-table">
+					<thead class="simple-table-header">
+						<tr>
+							<th class="simple-table-header-color simple-table-header">Area</th>
+							<th class="simple-table-header-color simple-table-header">Setting</th>
+							<th class="simple-table-header-color simple-table-header">Current CLI default</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td rowspan="8">Network</td>
+							<td>Architecture</td>
+							<td><code>deep_sets</code></td>
+						</tr>
+						<tr>
+							<td>Activation</td>
+							<td><code>Tanh</code></td>
+						</tr>
+						<tr>
+							<td>Actor and critic</td>
+							<td>Disjoint encoders and trunks</td>
+						</tr>
+						<tr>
+							<td>Entity attention</td>
+							<td>Enabled</td>
+						</tr>
+						<tr>
+							<td>Card decoder</td>
+							<td>Pointer decoder</td>
+						</tr>
+						<tr>
+							<td>Position decoder</td>
+							<td>Card-conditioned transposed-convolution decoder</td>
+						</tr>
+						<tr>
+							<td>Initialization</td>
+							<td>Orthogonal initialization enabled</td>
+						</tr>
+						<tr>
+							<td>Action temperatures</td>
+							<td>Learned independently per head</td>
+						</tr>
+						<tr>
+							<td rowspan="9">PPO</td>
+							<td>Discount factor, <code>γ</code></td>
+							<td><code>0.997</code></td>
+						</tr>
+						<tr>
+							<td>GAE factor, <code>λ</code></td>
+							<td><code>0.95</code></td>
+						</tr>
+						<tr>
+							<td>Rollout size</td>
+							<td>8 games, <code>9,600</code> transitions</td>
+						</tr>
+						<tr>
+							<td>PPO epochs per rollout</td>
+							<td><code>8</code></td>
+						</tr>
+						<tr>
+							<td>Minibatch size</td>
+							<td><code>2,048</code></td>
+						</tr>
+						<tr>
+							<td>Policy clip coefficient</td>
+							<td><code>0.2</code></td>
+						</tr>
+						<tr>
+							<td>Critic-loss coefficient</td>
+							<td><code>0.5</code></td>
+						</tr>
+						<tr>
+							<td>Entropy coefficient</td>
+							<td><code>0.01</code>, constant</td>
+						</tr>
+						<tr>
+							<td>Gradient clipping</td>
+							<td>Global norm <code>0.5</code></td>
+						</tr>
+						<tr>
+							<td rowspan="4">Optimisation</td>
+							<td>Optimizer</td>
+							<td>Adam</td>
+						</tr>
+						<tr>
+							<td>Initial learning rate</td>
+							<td><code>1.5 × 10⁻⁴</code></td>
+						</tr>
+						<tr>
+							<td>Learning-rate schedule</td>
+							<td>Linear decay to zero over 10 million environment steps</td>
+						</tr>
+						<tr>
+							<td>Automatic LR finder</td>
+							<td>Disabled</td>
+						</tr>
+						<tr>
+							<td rowspan="5">Collection and self-play</td>
+							<td>Parallel environments</td>
+							<td><code>8</code></td>
+						</tr>
+						<tr>
+							<td>Opponent mode</td>
+							<td>Checkpoint self-play, no overfit opponent</td>
+						</tr>
+						<tr>
+							<td>Checkpoint admission</td>
+							<td>At least 100 games and recent mean score ≥ <code>0.55</code></td>
+						</tr>
+						<tr>
+							<td>Opponent sampling</td>
+							<td>50% latest checkpoint, otherwise Elo-weighted toward an even matchup</td>
+						</tr>
+						<tr>
+							<td>Observation and value normalization</td>
+							<td>Disabled</td>
+						</tr>
+						<tr>
+							<td>Optional safety</td>
+							<td>KL early stopping</td>
+							<td>Disabled, threshold retained at <code>0.01</code></td>
+						</tr>
+					</tbody>
+				</table>
 			</div>
 			<div style="display:contents" dir="auto">
 				<h1 id="371aa1bf-7b79-8012-bc27-f64d8a45a5ec" class="">Experiments</h1>
