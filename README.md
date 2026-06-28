@@ -1,79 +1,100 @@
 # Clash Royale RL Playground
 
-A custom tick-based game engine simulating Clash Royale, written in Python. Pygame is used to render game states at each tick. 
-The primary goal is not an identical replica, but rather a performant reinforcement learning (RL) playground for agent training and experimentation.
+A custom tick-based Clash Royale-style simulator for reinforcement learning experiments. The core game engine is Python/Pygame, with PPO training code and a browser-playable web demo.
 
-## Installation
+## Play
 
-1. Install the project dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+Live browser demo:
 
-2. Install the right version of PyTorch from [here](https://pytorch.org)
+https://tanmay-4269-clash-royale-web-play.hf.space
 
-3. Install the repository in editable mode:
-   ```bash
-   pip install -e .
-   ```
-   This exposes the `game` and `rl` folders as top-level importable packages. All absolute imports (e.g. `import game` and `import rl`) will resolve properly without `sys.path` workarounds, ensuring IDEs and linters recognize them correctly.
+The demo lets you play as blue against built-in bots or trained [run 30](docs/index.html#386aa1bf-7b79-806f-a831-df97cdbff596)/[run 31](docs/index.html#386aa1bf-7b79-80e3-812e-e9d67b54c853) checkpoints. It is hosted on Hugging Face Spaces, so the first load can be slow if the free Space has gone to sleep.
 
-## Project Structure
+## Docs
 
-- `game/`: The core tick-based game engine (environment dynamics, physics, logic, units, rendering/UI) with zero dependencies on the RL stack.
-- `rl/`: The reinforcement learning training loop, PPO trainer, neural networks, and gymnasium environment wrapper.
-
-## Running the Environment & Training
-
-The repository includes a custom PPO trainer designed to interface with the parallelized Gymnasium environment.
-
-### 1. Training the Agent
-
-To start a standard PPO training run with parallel environments:
+The GitHub Pages article lives at:
 
 ```bash
-python ppo_trainer.py --num_envs 8
+docs/index.html
 ```
 
-**Common Flags:**
-- `--num_envs <int>`: Number of parallel environment workers (default: 1).
-- `--overfit_mode <mode>`: Test against specific profiles: `single-buffer`, `fixed-opponent`, `vs-random`, `vs-skip`, or `vs-scripted`.
-- `--profile`: Runs exactly two PPO updates and prints detailed timing statistics for buffer collection, GAE computation, and network updates before exiting. Useful for diagnosing CPU/GPU bottlenecks.
-- `--no-wandb_logging`: Disable Weights & Biases logging (enabled by default).
-- `--resume_run <run_id>`: Resume a previous run by providing its timestamped run name.
+It is the main writeup for the simulator, PPO setup, training runs, and gameplay videos.
 
-### 2. Environment Profiling & Benchmarking
+## Run The Browser Demo Locally
 
-If you are modifying the engine physics or observation wrappers and want to test environment throughput (Steps/Sec) directly without network overhead:
+Install the web dependencies:
 
 ```bash
-python profiling.py
+python3 -m pip install -r web_play/requirements-web.txt
 ```
 
-This script will run a heavy workload on both a single environment and an 8x parallel environment manager, reporting the exact FPS. 
+Start the local server:
 
----
-# Latest Progress
+```bash
+python3 -m web_play.server --host 127.0.0.1 --port 8765
+```
 
-![run 16 vs 14 vs 12](readme-assets/run-16_vs_run-14_vs_run-12.png)
+Open:
 
-### Summary
-- Magenta: Run 12
-    - overfit mode: vs-scripted
-- Dark Green: Run 14
-    - overfit mode: vs-random
-- Light Green: Run 16
-    - overfit mode: vs-random
-    - elixir based forced card or full skip
+```text
+http://127.0.0.1:8765
+```
 
-Latest run is a big deal coz it is able to surpass the 75% winrate while anything above 55% is considered pretty good. So the current network and training approach is finally strong enough to proceed to real self-play dynamics.
+## Run With Docker
 
-### Gameplay:
-<video controls src="readme-assets/run-16_gameplay_1.48M.mp4" title="Run-16 Gameplay after 1.48M Steps"></video>
-https://github.com/user-attachments/assets/83912232-d85e-4d70-85af-cf0871923717
+Build the image:
 
+```bash
+docker build -t clash-royale-web-play .
+```
 
-### Other distinctive features:
-- [pro] very clear score, reward and elo upward trend
-- [pro] gameplay wise: the position distribution are extremely sharp unlike ever before
-- [con] seems like its completely given up on knight and giant! perhaps adding in the rest of the 5 cards to complete the deck can prevent this imbalance
+Run it:
+
+```bash
+docker run --rm -p 7860:7860 clash-royale-web-play
+```
+
+Open:
+
+```text
+http://127.0.0.1:7860
+```
+
+## Package For Hugging Face Spaces
+
+Create the upload folder:
+
+```bash
+python3 web_play/package_hf_space.py
+```
+
+The package is written to:
+
+```bash
+dist/hf-space
+```
+
+That folder contains the Docker Space files plus the served checkpoint folders.
+
+## Run The Simulator Directly
+
+Install the base project dependencies:
+
+```bash
+pip install -r requirements.txt
+pip install -e .
+```
+
+Run the local Pygame simulator:
+
+```bash
+python game.py
+```
+
+## Project Layout
+
+- `game/`: tick-based simulator, entities, arena logic, rendering.
+- `rl/`: PPO trainer, Gymnasium environment wrapper, networks, checkpoint logic.
+- `web_play/`: browser-playable wrapper around the simulator.
+- `docs/`: GitHub Pages article and article assets.
+- `assets/`: card sprites used by the simulator and web demo.
