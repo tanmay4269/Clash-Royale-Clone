@@ -15,5 +15,6 @@ saved-videos/
 
 runs/
 saved-runs/
+run*
 
 wandb/
