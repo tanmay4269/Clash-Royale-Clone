@@ -1,0 +1,10 @@
+run_name: rerun30_deepsets_pointer_attention_0703-150254
+log_path: experiment_logs/rerun30_deepsets_pointer_attention.log
+checkpoint_elo_events: 12483
+checkpoints_seen: 126
+observed_games_against: 12357
+
+Note: an observed game against a checkpoint is counted from a logged
+'Renamed checkpoint ... from ELO ... to ...' event. If a game produced
+no rounded Elo change and therefore no rename line, it is not visible in
+the terminal log and cannot be counted by this parser.

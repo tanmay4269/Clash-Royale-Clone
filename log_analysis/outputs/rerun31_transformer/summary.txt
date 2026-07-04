@@ -1,0 +1,10 @@
+run_name: rerun31_transformer_0703-150319
+log_path: experiment_logs/rerun31_transformer.log
+checkpoint_elo_events: 11607
+checkpoints_seen: 77
+observed_games_against: 11530
+
+Note: an observed game against a checkpoint is counted from a logged
+'Renamed checkpoint ... from ELO ... to ...' event. If a game produced
+no rounded Elo change and therefore no rename line, it is not visible in
+the terminal log and cannot be counted by this parser.
